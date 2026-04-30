@@ -9,7 +9,10 @@
     "probe:axl": "bash probes/axl/run.sh",
     "probe:keeperhub": "bash probes/keeperhub/probe.sh",
     "probe:uniswap": "bash probes/uniswap/probe.sh",
-    "probe:all": "bash scripts/probe-all.sh"
+    "probe:all": "bash scripts/probe-all.sh",
+    "sdk:typecheck": "pnpm -F @agentdir/sdk typecheck",
+    "sdk:test": "pnpm -F @agentdir/sdk test",
+    "test:integration": "pnpm -F agentdir-integration test"
   },
   "packageManager": "pnpm@9.12.0"
 }
