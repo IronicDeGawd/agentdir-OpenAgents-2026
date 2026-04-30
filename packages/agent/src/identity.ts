@@ -5,7 +5,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { mkdir, readFile, writeFile, chmod } from "node:fs/promises";
-import { existsSync } from "node:fs";
 import * as ed from "@noble/ed25519";
 import { sha512 } from "@noble/hashes/sha512";
 
@@ -26,12 +25,32 @@ const root = () => join(homedir(), ".agentdir");
 const dir = (handle: string) => join(root(), handle);
 const file = (handle: string) => join(dir(handle), "identity.json");
 
-export async function loadOrCreate(handle: string, ensName: string): Promise<AgentIdentity> {
+/**
+ * Load existing identity from disk OR create a fresh one.
+ * If a file exists with a different `ensName`, throws — silent ENS swap is
+ * always a bug. Pass `ensName=null` to load whatever exists without checks.
+ */
+export async function loadOrCreate(
+  handle: string,
+  ensName: string | null
+): Promise<AgentIdentity> {
   const p = file(handle);
-  if (existsSync(p)) {
+  // Atomic: try-read; only fall through to creation on ENOENT.
+  try {
     const txt = await readFile(p, "utf8");
-    return JSON.parse(txt);
+    const id = JSON.parse(txt) as AgentIdentity;
+    if (ensName !== null && id.ensName !== ensName) {
+      throw new Error(
+        `identity '${handle}' has ensName '${id.ensName}' but caller passed '${ensName}'. ` +
+          `Refusing to silently overwrite. Pass null to ignore, or delete ${p}.`
+      );
+    }
+    return id;
+  } catch (e: any) {
+    if (e?.code !== "ENOENT") throw e;
+    // fall through to create
   }
+  if (ensName === null) throw new Error(`no identity for handle '${handle}' and no ensName provided`);
   await mkdir(dir(handle), { recursive: true });
   const priv = ed.utils.randomPrivateKey();
   const pub = await ed.getPublicKeyAsync(priv);
@@ -41,7 +60,8 @@ export async function loadOrCreate(handle: string, ensName: string): Promise<Age
     axlPrivateKeyHex: Buffer.from(priv).toString("hex"),
     axlPubkeyHex: Buffer.from(pub).toString("hex"),
   };
-  await writeFile(p, JSON.stringify(id, null, 2));
+  // wx flag → fail if file appeared between our read and write (race-safe).
+  await writeFile(p, JSON.stringify(id, null, 2), { flag: "wx" });
   await chmod(p, 0o600);
   return id;
 }

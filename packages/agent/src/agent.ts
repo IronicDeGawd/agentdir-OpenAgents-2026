@@ -1,4 +1,4 @@
-// Agent runtime: poll AXL /recv → execute skill → reply → attest.
+// Agent runtime: poll AXL /recv → execute skill → reply (signed) → attest.
 // One Agent instance owns one identity (one AXL key + one ENS name +
 // one iNFT). Multiple agents per process are supported; each gets a
 // distinct AxlClient base url if you run multiple AXL nodes locally.
@@ -13,9 +13,10 @@ import {
 } from "@agentdir/sdk";
 import type { AgentIdentity } from "./identity.js";
 import { signDigest } from "./identity.js";
-import { SkillRegistry } from "./skills.js";
+import { SkillRegistry, type RegisteredSkill } from "./skills.js";
 import {
   isSkillRequest,
+  type ResponseSigDomain,
   type SkillRequest,
   type SkillResponse,
 } from "./protocol.js";
@@ -29,10 +30,15 @@ export type AgentOpts = {
   skills: SkillRegistry;
   /** When true, skill responses include a payment-required err if no payment present. */
   requirePayment?: boolean;
+  /** Max age (ms) for incoming SkillRequest.ts; default 30s. */
+  maxRequestAgeMs?: number;
+  /** LRU size for nonce dedup; default 4096. */
+  nonceCacheSize?: number;
 };
 
 export class Agent {
   private running = false;
+  private seenNonces: Map<string, number> = new Map();
 
   constructor(public readonly opts: AgentOpts) {}
 
@@ -70,16 +76,71 @@ export class Agent {
     await this.handleSkillRequest(fromPubkey, parsed);
   }
 
+  private rejectStale(req: SkillRequest): string | null {
+    const max = this.opts.maxRequestAgeMs ?? 30_000;
+    const skew = Date.now() - req.ts;
+    if (Math.abs(skew) > max) return `stale: ${skew}ms`;
+    if (this.seenNonces.has(req.nonce)) return "replay";
+    this.seenNonces.set(req.nonce, Date.now());
+    // bounded LRU
+    const cap = this.opts.nonceCacheSize ?? 4096;
+    if (this.seenNonces.size > cap) {
+      const oldest = this.seenNonces.keys().next().value;
+      if (oldest !== undefined) this.seenNonces.delete(oldest);
+    }
+    return null;
+  }
+
+  /** Lightweight runtime validation against the skill's inputSchema. Only
+   *  enforces required + maxLength on string fields — not a full JSON Schema
+   *  engine but stops the obvious DoS vectors. */
+  private validateInput(reg: RegisteredSkill, input: any): string | null {
+    const schema: any = reg.def.inputSchema ?? {};
+    if (input === null || typeof input !== "object") return "input must be object";
+    for (const k of (schema.required as string[] | undefined) ?? []) {
+      if (!(k in input)) return `missing required field: ${k}`;
+    }
+    const props = schema.properties as Record<string, any> | undefined;
+    if (!props) return null;
+    for (const [k, prop] of Object.entries(props)) {
+      const v = input[k];
+      if (v === undefined) continue;
+      if (prop.type === "string") {
+        if (typeof v !== "string") return `field ${k} must be string`;
+        if (typeof prop.maxLength === "number" && v.length > prop.maxLength)
+          return `field ${k} exceeds maxLength=${prop.maxLength}`;
+      }
+    }
+    return null;
+  }
+
   private async handleSkillRequest(fromPubkey: string, req: SkillRequest): Promise<void> {
     const t0 = Date.now();
-    const reg = this.opts.skills.get(req.skill);
-    if (!reg) {
-      await this.replyErr(fromPubkey, req.id, `unknown skill: ${req.skill}`);
+    const stale = this.rejectStale(req);
+    if (stale) {
+      await this.replyErr(fromPubkey, req, `request rejected: ${stale}`);
       return;
     }
-
+    // The request claims callerPubkey; AXL doesn't strictly enforce sender
+    // identity matches the claim, so we record both. The fromPubkey is the
+    // AXL-level peer; callerPubkey is what the caller wants the responder
+    // to bind into the response sig.
+    if (req.callerPubkey.toLowerCase() !== fromPubkey.toLowerCase()) {
+      await this.replyErr(fromPubkey, req, "caller pubkey mismatch");
+      return;
+    }
+    const reg = this.opts.skills.get(req.skill);
+    if (!reg) {
+      await this.replyErr(fromPubkey, req, `unknown skill: ${req.skill}`);
+      return;
+    }
     if (this.opts.requirePayment && !req.payment) {
-      await this.replyErr(fromPubkey, req.id, "payment-required");
+      await this.replyErr(fromPubkey, req, "payment-required");
+      return;
+    }
+    const inputErr = this.validateInput(reg, req.input);
+    if (inputErr) {
+      await this.replyErr(fromPubkey, req, `invalid input: ${inputErr}`);
       return;
     }
 
@@ -89,11 +150,11 @@ export class Agent {
       output = await reg.handler(req.input, { compute: this.opts.compute });
     } catch (e: any) {
       ok = false;
-      await this.replyErr(fromPubkey, req.id, e?.message ?? "skill failed");
+      await this.replyErr(fromPubkey, req, e?.message ?? "skill failed");
     }
 
     if (ok) {
-      await this.replyOk(fromPubkey, req.id, output);
+      await this.replyOk(fromPubkey, req, output);
     }
 
     // Attest. Even failed calls get attested so reputation reflects reliability.
@@ -105,23 +166,68 @@ export class Agent {
     });
   }
 
-  private async replyOk(to: string, id: string, output: unknown): Promise<void> {
-    const digest = keccak256(toHex(canonicalJson({ id, output })));
-    const sig = await signDigest(this.opts.identity, digest);
+  private async signResponse(d: ResponseSigDomain): Promise<string> {
+    const digest = keccak256(toHex(canonicalJson(d)));
+    return signDigest(this.opts.identity, digest);
+  }
+
+  private async replyOk(to: string, req: SkillRequest, output: unknown): Promise<void> {
+    const ts = Date.now();
+    const responder = this.opts.identity.axlPubkeyHex;
+    const domain: ResponseSigDomain = {
+      v: 1,
+      id: req.id,
+      ok: true,
+      output,
+      responder,
+      caller: req.callerPubkey,
+      skill: req.skill,
+      ts,
+    };
+    const sig = await this.signResponse(domain);
     const res: SkillResponse = {
       v: 1,
       type: "skill.res",
-      id,
+      id: req.id,
       ok: true,
       output,
+      ts,
+      responder,
+      caller: req.callerPubkey,
+      skill: req.skill,
       sig,
-      signerPubkey: this.opts.identity.axlPubkeyHex,
+      signerPubkey: responder,
     };
     await this.opts.axl.sendJson(to, res);
   }
 
-  private async replyErr(to: string, id: string, error: string): Promise<void> {
-    const res: SkillResponse = { v: 1, type: "skill.res", id, ok: false, error };
+  private async replyErr(to: string, req: SkillRequest, error: string): Promise<void> {
+    const ts = Date.now();
+    const responder = this.opts.identity.axlPubkeyHex;
+    const domain: ResponseSigDomain = {
+      v: 1,
+      id: req.id,
+      ok: false,
+      error,
+      responder,
+      caller: req.callerPubkey,
+      skill: req.skill,
+      ts,
+    };
+    const sig = await this.signResponse(domain);
+    const res: SkillResponse = {
+      v: 1,
+      type: "skill.res",
+      id: req.id,
+      ok: false,
+      error,
+      ts,
+      responder,
+      caller: req.callerPubkey,
+      skill: req.skill,
+      sig,
+      signerPubkey: responder,
+    };
     await this.opts.axl.sendJson(to, res);
   }
 
