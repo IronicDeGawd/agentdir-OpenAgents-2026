@@ -12,3 +12,7 @@ private*.pem
 .DS_Store
 
 .claude/
+
+# probe scratch
+probes/*/.work/
+probes/*/.work-last.log
