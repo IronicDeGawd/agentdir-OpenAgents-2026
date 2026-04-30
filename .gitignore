@@ -1,0 +1,14 @@
+context/
+node_modules/
+dist/
+.env
+.env.local
+*.log
+out/
+artifacts/
+cache/
+broadcast/
+private*.pem
+.DS_Store
+
+.claude/

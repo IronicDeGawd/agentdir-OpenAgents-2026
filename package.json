@@ -1,0 +1,15 @@
+{
+  "name": "agentdir",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "probe:ens": "pnpm -F probe-ens probe",
+    "probe:0g-storage": "pnpm -F probe-0g-storage probe",
+    "probe:0g-compute": "pnpm -F probe-0g-compute probe",
+    "probe:axl": "bash probes/axl/run.sh",
+    "probe:keeperhub": "bash probes/keeperhub/probe.sh",
+    "probe:uniswap": "bash probes/uniswap/probe.sh",
+    "probe:all": "bash scripts/probe-all.sh"
+  },
+  "packageManager": "pnpm@9.12.0"
+}

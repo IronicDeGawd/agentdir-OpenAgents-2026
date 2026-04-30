@@ -1,0 +1,17 @@
+{
+  "name": "probe-0g-storage",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "probe": "tsx probe.ts"
+  },
+  "dependencies": {
+    "@0gfoundation/0g-ts-sdk": "*",
+    "ethers": "^6.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

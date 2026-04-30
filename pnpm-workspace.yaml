@@ -1,0 +1,5 @@
+packages:
+  - "packages/*"
+  - "probes/ens"
+  - "probes/0g-storage"
+  - "probes/0g-compute"
