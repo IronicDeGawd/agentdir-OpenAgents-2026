@@ -30,8 +30,29 @@ call() {
 # 1. Auth + list workflows
 call "list workflows" GET "/workflows"
 
-# 2. Create test workflow
-RESP=$(curl -s -X POST "${H[@]}" -d '{"name":"agentdir-probe","description":"smoke"}' "$API/workflows/create")
+# 2. Create minimal workflow: manual trigger node only.
+WF_BODY=$(cat <<'JSON'
+{
+  "name": "agentdir-probe",
+  "description": "smoke",
+  "nodes": [
+    {
+      "id": "trigger-1",
+      "type": "trigger",
+      "position": { "x": 100, "y": 100 },
+      "data": {
+        "label": "Manual Trigger",
+        "type": "trigger",
+        "config": { "triggerType": "Manual" },
+        "status": "idle"
+      }
+    }
+  ],
+  "edges": []
+}
+JSON
+)
+RESP=$(curl -s -X POST "${H[@]}" -d "$WF_BODY" "$API/workflows/create")
 WID=$(echo "$RESP" | python3 -c "import sys,json;print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")
 if [ -n "$WID" ]; then
   echo "PASS  create workflow ($WID)"; PASS=$((PASS+1))
