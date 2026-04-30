@@ -4,6 +4,7 @@
 // at the most recent root. Merkle-verifiable, no separate service.
 
 import { keccak256, toHex } from "viem";
+import * as ed from "@noble/ed25519";
 import { canonicalJson } from "./agent-card.js";
 import type { Storage } from "./storage.js";
 import type { RepAttestation } from "./types.js";
@@ -12,7 +13,12 @@ export type AppendInput = Omit<RepAttestation, "v" | "ts" | "prevRoot" | "sig"> 
   signer: (digestHex: `0x${string}`) => Promise<string>; // ed25519 sig hex
 };
 
+const stripHex = (h: string) => (h.startsWith("0x") ? h.slice(2) : h);
+
 export class RepChain {
+  // Serialize append() so concurrent callers don't share prevRoot and fork.
+  private _lock: Promise<unknown> = Promise.resolve();
+
   constructor(
     public readonly storage: Storage,
     public head: string | null = null
@@ -23,7 +29,29 @@ export class RepChain {
     return keccak256(toHex(canonicalJson(att)));
   }
 
+  /**
+   * Verify ed25519 signature on an attestation against the caller's pubkey.
+   * Pubkey hex (with or without 0x). Returns false on any error.
+   */
+  static async verify(att: RepAttestation, callerAxlPubkeyHex: string): Promise<boolean> {
+    try {
+      const { sig, ...rest } = att;
+      const digest = RepChain.digest(rest);
+      const sigBytes = Buffer.from(stripHex(sig), "hex");
+      const pubBytes = Buffer.from(stripHex(callerAxlPubkeyHex), "hex");
+      const msgBytes = Buffer.from(stripHex(digest), "hex");
+      return await ed.verifyAsync(sigBytes, msgBytes, pubBytes);
+    } catch {
+      return false;
+    }
+  }
+
   async append(input: AppendInput): Promise<{ root: string; att: RepAttestation }> {
+    const run = (this._lock = this._lock.then(() => this._appendInner(input)));
+    return run as Promise<{ root: string; att: RepAttestation }>;
+  }
+
+  private async _appendInner(input: AppendInput) {
     const base: Omit<RepAttestation, "sig"> = {
       v: 1,
       callerINFT: input.callerINFT,
@@ -45,12 +73,16 @@ export class RepChain {
     return this.storage.getJson<RepAttestation>(rootHash);
   }
 
-  /** Walk chain from `head` backward up to `limit` entries (oldest last). */
-  async walk(head: string, limit = 100): Promise<RepAttestation[]> {
+  /**
+   * Walk chain from `head` backward up to `limit` entries (newest first).
+   * If `verifyKey` provided, drops attestations with bad sigs and stops at first invalid prevRoot link.
+   */
+  async walk(head: string, limit = 100, verifyKey?: string): Promise<RepAttestation[]> {
     const out: RepAttestation[] = [];
     let cur: string | null = head;
     while (cur && out.length < limit) {
       const a: RepAttestation = await this.getAt(cur);
+      if (verifyKey && !(await RepChain.verify(a, verifyKey))) break;
       out.push(a);
       cur = a.prevRoot;
     }

@@ -3,6 +3,9 @@
 
 import { ethers, type Signer } from "ethers";
 import { Indexer, MemData } from "@0gfoundation/0g-ts-sdk";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 
 const TESTNET_RPC = "https://evmrpc-testnet.0g.ai";
 const TESTNET_INDEXER = "https://indexer-storage-testnet-turbo.0g.ai";
@@ -43,13 +46,18 @@ export class Storage {
 
   /** Download by rootHash, verify proof, return bytes. */
   async getBytes(rootHash: string): Promise<Uint8Array> {
-    const tmp = `./.work-dl-${ethers.id(rootHash + Date.now()).slice(2, 18)}.bin`;
+    // Always tmpdir() — CWD may be unwritable in packaged agents.
+    // randomUUID prevents same-millisecond collisions on concurrent gets.
+    const tmp = join(tmpdir(), `agentdir-dl-${randomUUID()}.bin`);
     const err = await this.indexer.download(rootHash, tmp, true);
     if (err !== null) throw new Error(`download: ${err}`);
     const fs = await import("node:fs/promises");
-    const buf = await fs.readFile(tmp);
-    await fs.unlink(tmp).catch(() => {});
-    return new Uint8Array(buf);
+    try {
+      const buf = await fs.readFile(tmp);
+      return new Uint8Array(buf);
+    } finally {
+      await fs.unlink(tmp).catch(() => {});
+    }
   }
 
   async getJson<T = unknown>(rootHash: string): Promise<T> {

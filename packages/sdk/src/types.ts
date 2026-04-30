@@ -2,12 +2,13 @@
 
 /**
  * Skill = one named capability an agent advertises and can be paid to perform.
- * Compatible with A2A AgentCard skill shape.
+ * Compatible with A2A 0.2.5 AgentSkill shape.
  */
 export type Skill = {
   id: string;
   name: string;
   description: string;
+  tags: string[]; // A2A required
   inputSchema: Record<string, unknown>;
   outputSchema?: Record<string, unknown>;
   pricing?: {
@@ -15,21 +16,31 @@ export type Skill = {
   };
 };
 
+export type AgentCapabilities = {
+  streaming?: boolean;
+  pushNotifications?: boolean;
+  stateTransitionHistory?: boolean;
+};
+
 /**
- * AgentCard = the full A2A-compatible card, plus agentdir-specific identity.
+ * AgentCard = A2A 0.2.5-shaped card plus agentdir-specific identity.
  * Published as the ENS text record `org.a2a.agent-card` (JSON-encoded).
  */
 export type AgentCard = {
-  protocolVersion: "0.2";
+  protocolVersion: "0.2.5";
   name: string; // ENS subname, e.g. "alice.agentdir.eth"
   description: string;
   url: string; // axl://<axl_pubkey_hex>
+  version: string; // implementation version, semver-ish
+  capabilities: AgentCapabilities;
+  defaultInputModes: string[];
+  defaultOutputModes: string[];
   skills: Skill[];
   identity: {
     erc7857?: { chainId: number; contract: string; tokenId: string };
     axlPubkey: string;
   };
-  // Optional pointer to the head of this agent's reputation chain on 0G Storage.
+  // Pointer to head of this agent's reputation chain on 0G Storage.
   // ENS text record `network.agentdir.rep-head` mirrors this for cheap lookup.
   repHead?: string;
 };

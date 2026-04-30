@@ -7,11 +7,13 @@ import {
   parseAgentCard,
   validateAgentCard,
 } from "./agent-card.js";
+import type { Skill } from "./types.js";
 
-const skill = {
+const skill: Skill = {
   id: "summarize",
   name: "summarize",
   description: "summarize text",
+  tags: ["nlp"],
   inputSchema: { type: "object", properties: { text: { type: "string" } } },
   pricing: { x402: { token: "USDC", chainId: 8453, amount: "10000" } },
 };
@@ -39,8 +41,22 @@ test("validateAgentCard rejects bad pubkey", () => {
   assert.match(err ?? "", /axlPubkey/);
 });
 
+test("validateAgentCard rejects skill missing tags", () => {
+  const bad = { ...sampleCard, skills: [{ ...skill, tags: undefined as any }] };
+  const err = validateAgentCard(bad);
+  assert.match(err ?? "", /tags/);
+});
+
+test("canonicalJson drops undefined values", () => {
+  const a = canonicalJson({ a: 1, b: undefined, c: 2 });
+  assert.equal(a, '{"a":1,"c":2}');
+});
+
 test("validateAgentCard rejects missing skill schema", () => {
-  const bad = { ...sampleCard, skills: [{ id: "x", name: "x", description: "x" } as any] };
+  const bad = {
+    ...sampleCard,
+    skills: [{ id: "x", name: "x", description: "x", tags: [] } as any],
+  };
   const err = validateAgentCard(bad);
   assert.match(err ?? "", /inputSchema/);
 });

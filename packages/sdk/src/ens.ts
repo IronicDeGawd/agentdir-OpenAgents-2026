@@ -56,7 +56,7 @@ export class EnsResolver {
       ENS_RECORD_KEYS.map(async (k) => [k, await this.getText(name, k)] as const)
     );
     const out: Partial<EnsRecordBundle> = {};
-    for (const [k, v] of entries) if (v) (out as any)[k] = v;
+    for (const [k, v] of entries) if (v) out[k] = v;
     return out;
   }
 
@@ -71,7 +71,8 @@ export class EnsResolver {
    * Spoofing defense:
    * (1) ENS name resolves to expected wallet,
    * (2) reverse resolution from that wallet returns the same name,
-   * (3) AgentCard's axlPubkey matches the `network.axl.pubkey` text record.
+   * (3) `network.axl.pubkey` text record == expectedAxlPubkey,
+   * (4) AgentCard's identity.axlPubkey == `network.axl.pubkey`.
    * Returns null on success, error string otherwise.
    */
   async verifyIdentity(name: string, expectedAxlPubkey: string): Promise<string | null> {
@@ -82,6 +83,14 @@ export class EnsResolver {
     const pub = await this.getText(name, "network.axl.pubkey");
     if (!pub || pub.toLowerCase() !== expectedAxlPubkey.toLowerCase())
       return "axl.pubkey mismatch";
+    // Cross-check: card's claimed pubkey must match the dedicated record.
+    try {
+      const card = await this.getAgentCard(name);
+      if (card.identity.axlPubkey.toLowerCase() !== pub.toLowerCase())
+        return "agent-card pubkey mismatch";
+    } catch (e: any) {
+      return `agent-card unreadable: ${e?.message ?? "unknown"}`;
+    }
     return null;
   }
 }
