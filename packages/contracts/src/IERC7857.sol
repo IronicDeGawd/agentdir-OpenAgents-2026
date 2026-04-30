@@ -16,6 +16,9 @@ interface IERC7857 {
     /// @notice Emitted when the AXL ed25519 pubkey associated with a token changes.
     event AgentPubkeyUpdated(uint256 indexed tokenId, bytes32 axlPubkey);
 
+    /// @notice Emitted when the off-chain agent-card pointer rotates.
+    event AgentURIUpdated(uint256 indexed tokenId, string uri);
+
     /// @notice Returns the current off-chain state root for `tokenId`.
     function agentStateRoot(uint256 tokenId) external view returns (bytes32);
 
