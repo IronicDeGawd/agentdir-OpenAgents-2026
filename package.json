@@ -12,7 +12,10 @@
     "probe:all": "bash scripts/probe-all.sh",
     "sdk:typecheck": "pnpm -F @agentdir/sdk typecheck",
     "sdk:test": "pnpm -F @agentdir/sdk test",
-    "test:integration": "pnpm -F agentdir-integration test"
+    "test:integration": "pnpm -F agentdir-integration test",
+    "contracts:build": "cd packages/contracts && forge build",
+    "contracts:test": "cd packages/contracts && forge test -vv",
+    "contracts:deploy:0g": "cd packages/contracts && set -a; . ../../.env.local; set +a; forge script script/Deploy.s.sol:Deploy --rpc-url zerog_testnet --broadcast"
   },
   "packageManager": "pnpm@9.12.0"
 }
