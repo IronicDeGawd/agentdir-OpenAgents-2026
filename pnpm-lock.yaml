@@ -8,6 +8,34 @@ importers:
 
   .: {}
 
+  packages/agent:
+    dependencies:
+      '@agentdir/sdk':
+        specifier: workspace:*
+        version: link:../sdk
+      '@noble/ed25519':
+        specifier: ^2.1.0
+        version: 2.3.0
+      '@noble/hashes':
+        specifier: ^1.5.0
+        version: 1.8.0
+      ethers:
+        specifier: ^6.16.0
+        version: 6.16.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+      viem:
+        specifier: ^2.35.0
+        version: 2.48.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)
+    devDependencies:
+      '@types/node':
+        specifier: ^22.7.0
+        version: 22.7.5
+      tsx:
+        specifier: ^4.19.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+
   packages/sdk:
     dependencies:
       '@0gfoundation/0g-ts-sdk':

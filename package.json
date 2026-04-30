@@ -15,7 +15,10 @@
     "test:integration": "pnpm -F agentdir-integration test",
     "contracts:build": "cd packages/contracts && forge build",
     "contracts:test": "cd packages/contracts && forge test -vv",
-    "contracts:deploy:0g": "cd packages/contracts && set -a; . ../../.env.local; set +a; forge script script/Deploy.s.sol:Deploy --rpc-url zerog_testnet --broadcast"
+    "contracts:deploy:0g": "cd packages/contracts && set -a; . ../../.env.local; set +a; forge script script/Deploy.s.sol:Deploy --rpc-url zerog_testnet --broadcast",
+    "agent:typecheck": "pnpm -F @agentdir/agent typecheck",
+    "agent:test": "pnpm -F @agentdir/agent test",
+    "agent:start": "pnpm -F @agentdir/agent start"
   },
   "packageManager": "pnpm@9.12.0"
 }
