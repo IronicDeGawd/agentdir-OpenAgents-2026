@@ -54,11 +54,12 @@ check "key A generated" test -s "$WORK/private-a.pem"
 check "key B generated" test -s "$WORK/private-b.pem"
 
 # 3. Configs
+# tcp_port must match on both sides — sender uses its own TCPPort to dial peer's gVisor stack.
 cat > "$WORK/node-a.json" <<EOF
-{ "PrivateKeyPath": "$WORK/private-a.pem", "Peers": [], "Listen": ["tls://0.0.0.0:9101"], "api_port": 9102, "tcp_port": 7101 }
+{ "PrivateKeyPath": "$WORK/private-a.pem", "Peers": [], "Listen": ["tls://0.0.0.0:9101"], "api_port": 9102, "tcp_port": 7100 }
 EOF
 cat > "$WORK/node-b.json" <<EOF
-{ "PrivateKeyPath": "$WORK/private-b.pem", "Peers": ["tls://127.0.0.1:9101"], "api_port": 9112, "tcp_port": 7102 }
+{ "PrivateKeyPath": "$WORK/private-b.pem", "Peers": ["tls://127.0.0.1:9101"], "api_port": 9112, "tcp_port": 7100 }
 EOF
 
 # 4. Start nodes
@@ -78,11 +79,16 @@ check "node B /topology" test -n "$B_KEY"
 [ -n "$A_KEY" ] && echo "    A=$A_KEY"
 [ -n "$B_KEY" ] && echo "    B=$B_KEY"
 
-# 6. send/recv B→A
+# 6. send/recv B→A — overlay tree needs a few seconds after peering
 if [ -n "$A_KEY" ] && [ -n "$B_KEY" ]; then
+  sleep 3   # let spanning tree converge
   curl -s -X POST http://127.0.0.1:9112/send -H "X-Destination-Peer-Id: $A_KEY" --data "hello-from-b" >/dev/null
-  sleep 1
-  RESP=$(curl -s http://127.0.0.1:9102/recv)
+  RESP=""
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    RESP=$(curl -s http://127.0.0.1:9102/recv)
+    [ -n "$RESP" ] && break
+    sleep 1
+  done
   if [ "$RESP" = "hello-from-b" ]; then
     echo "PASS  send/recv B→A"; PASS=$((PASS+1))
   else
