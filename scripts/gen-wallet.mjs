@@ -24,8 +24,10 @@ WALLET_ADDRESS=${acct.address}
 
 if (existsSync(envPath)) {
   const existing = readFileSync(envPath, "utf8");
-  if (existing.includes("PRIVATE_KEY=") && !existing.includes("PRIVATE_KEY=0x\n") && !existing.includes("PRIVATE_KEY=\n")) {
-    console.error("ERR  .env.local already has PRIVATE_KEY. Edit manually if you want to overwrite.");
+  // Block any non-empty PRIVATE_KEY value. Match must require ≥1 char that
+  // isn't whitespace; bare "PRIVATE_KEY=" or padded "PRIVATE_KEY=  " passes.
+  if (/^PRIVATE_KEY=\s*\S+/m.test(existing)) {
+    console.error("ERR  .env.local already has a non-empty PRIVATE_KEY. Edit manually if you want to overwrite.");
     process.exit(1);
   }
   writeFileSync(envPath, existing.trimEnd() + "\n" + block);

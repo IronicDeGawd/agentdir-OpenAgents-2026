@@ -1,0 +1,16 @@
+{
+  "name": "agentdir-integration",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "tsx --test ./*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  },
+  "dependencies": {
+    "@agentdir/sdk": "workspace:*"
+  }
+}
