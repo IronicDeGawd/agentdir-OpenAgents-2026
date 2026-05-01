@@ -23,3 +23,4 @@ export {
   type Envelope,
 } from "./protocol.js";
 export { callSkill } from "./caller.js";
+export { LocalBusClient, resetLocalBus } from "./local-bus.js";
