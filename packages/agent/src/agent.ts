@@ -17,6 +17,7 @@ import {
   verifyReceipt,
   type MemorySnapshot,
   type PaymentExpectations,
+  type RoutingTable,
   type SkillStats,
   type TeeInferenceAttestation,
 } from "@agentdir/sdk";
@@ -49,6 +50,15 @@ export type AgentOpts = {
   inft?: InftWriter;
   /** Auto-snapshot every N successful calls. 0 disables (default). */
   snapshotEvery?: number;
+  /** Swarm config — populated only when this agent is wired with a
+   *  routing table and should host the `route` meta-skill. */
+  swarm?: {
+    /** AXL/LocalBus client this agent uses to fan out to downstreams.
+     *  In-process LocalBus collisions are avoided when the route handler
+     *  uses the same client the agent listens on. */
+    axl: AxlClient;
+    routingTable: RoutingTable;
+  };
   /** Payment receipt expectations (skill pricing comes from skill.def). */
   paymentExpectations?: {
     /** Callee's EVM address — recipient field on receipt. */
@@ -239,7 +249,20 @@ export class Agent {
     let output: unknown;
     let ok = true;
     try {
-      output = await reg.handler(req.input, { compute: this.opts.compute });
+      const ctx = {
+        compute: this.opts.compute,
+        ...(this.opts.swarm
+          ? {
+              swarm: {
+                axl: this.opts.swarm.axl,
+                routingTable: this.opts.swarm.routingTable,
+                callerPubkey: this.opts.identity.axlPubkeyHex,
+                callerINFT: this.opts.identity.inftTokenId,
+              },
+            }
+          : {}),
+      };
+      output = await reg.handler(req.input, ctx);
     } catch (e: any) {
       ok = false;
       await this.replyErr(fromPubkey, req, e?.message ?? "skill failed");

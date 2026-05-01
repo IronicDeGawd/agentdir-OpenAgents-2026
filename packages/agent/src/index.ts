@@ -9,6 +9,7 @@ export {
   SkillRegistry,
   SUMMARIZE,
   SENTIMENT,
+  ROUTE,
   type RegisteredSkill,
   type SkillCtx,
   type SkillHandler,
