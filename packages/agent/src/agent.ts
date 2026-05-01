@@ -7,9 +7,13 @@ import { keccak256, toHex } from "viem";
 import {
   AxlClient,
   Compute,
+  InftWriter,
   RepChain,
+  SnapshotChain,
   Storage,
   canonicalJson,
+  type MemorySnapshot,
+  type SkillStats,
 } from "@agentdir/sdk";
 import type { AgentIdentity } from "./identity.js";
 import { signDigest } from "./identity.js";
@@ -34,13 +38,32 @@ export type AgentOpts = {
   maxRequestAgeMs?: number;
   /** LRU size for nonce dedup; default 4096. */
   nonceCacheSize?: number;
+  /** Snapshot chain — required when snapshotEvery > 0. */
+  snapshots?: SnapshotChain;
+  /** INFT writer for anchoring snapshot root on-chain. */
+  inft?: InftWriter;
+  /** Auto-snapshot every N successful calls. 0 disables (default). */
+  snapshotEvery?: number;
 };
 
 export class Agent {
   private running = false;
   private seenNonces: Map<string, number> = new Map();
+  private callsTotal = 0;
+  private okTotal = 0;
+  private skillStats: SkillStats = {};
+  private snapshotInFlight: Promise<unknown> | null = null;
 
   constructor(public readonly opts: AgentOpts) {}
+
+  /** Read-only stats snapshot for callers (CLI, tests). */
+  stats() {
+    return {
+      callsTotal: this.callsTotal,
+      okTotal: this.okTotal,
+      skillStats: { ...this.skillStats },
+    };
+  }
 
   async start(): Promise<void> {
     this.running = true;
@@ -164,6 +187,76 @@ export class Agent {
       latencyMs: Date.now() - t0,
       skill: req.skill,
     });
+
+    this.bumpStats(req.skill, ok);
+    this.maybeSnapshot();
+  }
+
+  private bumpStats(skill: string, ok: boolean): void {
+    this.callsTotal += 1;
+    if (ok) this.okTotal += 1;
+    const cur = this.skillStats[skill] ?? { calls: 0, ok: 0 };
+    cur.calls += 1;
+    if (ok) cur.ok += 1;
+    else cur.errLastTs = Math.floor(Date.now() / 1000);
+    this.skillStats[skill] = cur;
+  }
+
+  /** Fire-and-forget snapshot rotation if threshold hit. Skips overlapping rotations. */
+  private maybeSnapshot(): void {
+    const every = this.opts.snapshotEvery ?? 0;
+    if (every <= 0) return;
+    if (this.callsTotal % every !== 0) return;
+    if (this.snapshotInFlight) return; // skip; previous still running
+    this.snapshotInFlight = this.snapshotNow().catch((e: any) => {
+      // eslint-disable-next-line no-console
+      console.error("[agent] snapshot rotation failed:", e?.message ?? e);
+    }).finally(() => {
+      this.snapshotInFlight = null;
+    });
+  }
+
+  /**
+   * Force an immediate snapshot. Uploads memory blob to 0G Storage, then
+   * (if InftWriter present) anchors root on-chain via setAgentStateRoot.
+   * Returns the new snapshot rootHash (or null if no snapshot chain configured).
+   *
+   * On first call after process start, seeds the snapshot chain head from
+   * the on-chain prev root so the chain stays linked across restarts.
+   */
+  async snapshotNow(): Promise<{ root: string; snapshot: MemorySnapshot; txHash?: string } | null> {
+    if (!this.opts.snapshots) return null;
+    const tokenId = this.opts.identity.inftTokenId;
+    if (!tokenId) throw new Error("identity.inftTokenId required for snapshot");
+
+    // Seed chain head from on-chain root if our local chain is empty AND
+    // the contract has a non-zero prev root. Prevents fork on agent restart.
+    if (this.opts.snapshots.head === null && this.opts.inft) {
+      try {
+        const prev = await this.opts.inft.getStateRoot(tokenId);
+        const ZERO = "0x" + "00".repeat(32);
+        if (prev && prev !== ZERO) this.opts.snapshots.head = prev;
+      } catch {
+        // RPC failure is non-fatal — proceed as genesis.
+      }
+    }
+
+    const repHead = this.opts.rep?.head ?? null;
+    const { root, snapshot } = await this.opts.snapshots.append({
+      ensName: this.opts.identity.ensName,
+      signerPubkey: this.opts.identity.axlPubkeyHex,
+      inftTokenId: tokenId,
+      callsTotal: this.callsTotal,
+      okTotal: this.okTotal,
+      skillStats: { ...this.skillStats },
+      repHead,
+      signer: (digest) => signDigest(this.opts.identity, digest),
+    });
+    let txHash: string | undefined;
+    if (this.opts.inft) {
+      txHash = await this.opts.inft.setStateRoot(tokenId, root);
+    }
+    return { root, snapshot, txHash };
   }
 
   private async signResponse(d: ResponseSigDomain): Promise<string> {

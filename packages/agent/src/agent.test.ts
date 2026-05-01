@@ -194,6 +194,95 @@ test("requirePayment rejects unpaid call", async () => {
   assert.match(sent.error, /payment-required/);
 });
 
+test("agent counts calls and per-skill stats", async () => {
+  const axl = new FakeAxl();
+  const compute = new FakeCompute(["a", "b", "c"]);
+  const skills = new SkillRegistry().add(SUMMARIZE);
+  const agent = new Agent({ identity: id, axl: axl as any, compute: compute as any, skills });
+  await agent.handleInbound(callerPubHex, JSON.stringify(newReq()));
+  await agent.handleInbound(callerPubHex, JSON.stringify(newReq()));
+  await agent.handleInbound(callerPubHex, JSON.stringify(newReq()));
+  const s = agent.stats();
+  assert.equal(s.callsTotal, 3);
+  assert.equal(s.okTotal, 3);
+  assert.equal(s.skillStats.summarize?.calls, 3);
+  assert.equal(s.skillStats.summarize?.ok, 3);
+});
+
+test("snapshotEvery triggers rotation after threshold", async () => {
+  const axl = new FakeAxl();
+  const compute = new FakeCompute(["a", "b"]);
+  const skills = new SkillRegistry().add(SUMMARIZE);
+  const storage = new FakeStorage();
+  const { SnapshotChain } = await import("@agentdir/sdk");
+  const snapshots = new SnapshotChain(storage as any);
+  const agent = new Agent({
+    identity: id,
+    axl: axl as any,
+    compute: compute as any,
+    skills,
+    snapshots,
+    snapshotEvery: 2,
+  });
+  await agent.handleInbound(callerPubHex, JSON.stringify(newReq()));
+  assert.equal(storage.n, 0); // not yet
+  await agent.handleInbound(callerPubHex, JSON.stringify(newReq()));
+  // maybeSnapshot is fire-and-forget; let the microtask queue drain.
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(storage.n, 1);
+  const blob: any = [...storage.map.values()][0];
+  assert.equal(blob.callsTotal, 2);
+  assert.equal(blob.okTotal, 2);
+  assert.equal(blob.inftTokenId, "1");
+});
+
+test("snapshotNow seeds chain head from on-chain root on first call", async () => {
+  const axl = new FakeAxl();
+  const compute = new FakeCompute([]);
+  const skills = new SkillRegistry();
+  const storage = new FakeStorage();
+  const { SnapshotChain } = await import("@agentdir/sdk");
+  const snapshots = new SnapshotChain(storage as any);
+  const FAKE_PREV = "0x" + "ab".repeat(32);
+  const fakeInft = {
+    getStateRoot: async () => FAKE_PREV,
+    setStateRoot: async () => "0xtxhash",
+  };
+  const agent = new Agent({
+    identity: id,
+    axl: axl as any,
+    compute: compute as any,
+    skills,
+    snapshots,
+    inft: fakeInft as any,
+  });
+  const result = await agent.snapshotNow();
+  assert.ok(result);
+  assert.equal(result!.snapshot.prevSnapshotRoot, FAKE_PREV);
+  assert.equal(result!.txHash, "0xtxhash");
+});
+
+test("snapshotNow uploads + signs blob", async () => {
+  const axl = new FakeAxl();
+  const compute = new FakeCompute([]);
+  const skills = new SkillRegistry();
+  const storage = new FakeStorage();
+  const { SnapshotChain } = await import("@agentdir/sdk");
+  const snapshots = new SnapshotChain(storage as any);
+  const agent = new Agent({
+    identity: id,
+    axl: axl as any,
+    compute: compute as any,
+    skills,
+    snapshots,
+  });
+  const result = await agent.snapshotNow();
+  assert.ok(result);
+  assert.equal(storage.n, 1);
+  const { SnapshotChain: SC } = await import("@agentdir/sdk");
+  assert.equal(await SC.verify(result!.snapshot, id.axlPubkeyHex), true);
+});
+
 test("rep chain receives one attestation per call", async () => {
   const axl = new FakeAxl();
   const compute = new FakeCompute(["Summary."]);
