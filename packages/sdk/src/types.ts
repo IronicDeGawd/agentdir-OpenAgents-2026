@@ -46,6 +46,22 @@ export type AgentCard = {
 };
 
 /**
+ * Optional TEE-verified inference attestation embedded in a RepAttestation.
+ * Means: the response that drove this rep was produced by a 0G Compute
+ * provider whose TEE attestation passed validation via
+ * broker.inference.processResponse. Bumps trust from "the responder said
+ * the call worked" to "the inference itself is cryptographically real."
+ */
+export type TeeInferenceAttestation = {
+  /** Provider EVM address that served the inference. */
+  provider: string;
+  /** ZG-Res-Key (or fallback data.id) for the response. */
+  chatID: string;
+  /** Validation outcome from broker.inference.processResponse. */
+  verified: boolean;
+};
+
+/**
  * One reputation attestation. Append-only chain stored on 0G Storage.
  * Each attestation references the previous root hash, forming a merkle chain.
  */
@@ -58,6 +74,8 @@ export type RepAttestation = {
   latencyMs: number;
   ts: number; // unix seconds
   prevRoot: string | null; // previous attestation rootHash (or null for first)
+  /** Optional. Present when the skill ran on TEE-verified 0G Compute. */
+  teeAttestation?: TeeInferenceAttestation;
   // Signature over keccak256(canonicalJson(this without sig)).
   // Signer = caller's AXL ed25519 key (hex).
   sig: string;

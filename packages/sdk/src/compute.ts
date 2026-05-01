@@ -18,6 +18,9 @@ export type ComputeOpts = {
 export class Compute {
   readonly client: OpenAI;
   readonly model: string;
+  /** Always null for Router-mode Compute. Present for API symmetry with
+   *  DirectCompute so agent runtime can read it without instanceof. */
+  readonly lastTeeAttestation: null = null;
 
   constructor(opts: ComputeOpts) {
     const base =

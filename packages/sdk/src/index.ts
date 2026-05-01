@@ -7,6 +7,13 @@ export { Storage, makeSigner, type StorageOpts } from "./storage.js";
 export { RepChain, type AppendInput } from "./rep.js";
 export { Compute, type ComputeOpts } from "./compute.js";
 export {
+  DirectCompute,
+  type DirectComputeOpts,
+  type DirectComputeResult,
+  type DirectComputeChatOpts,
+  type TeeAttestation,
+} from "./compute-direct.js";
+export {
   SnapshotChain,
   type MemorySnapshot,
   type SnapshotBody,
