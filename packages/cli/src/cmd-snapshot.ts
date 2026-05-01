@@ -13,7 +13,6 @@ import {
   InftWriter,
   SnapshotChain,
   Storage,
-  makeSigner,
 } from "@agentdir/sdk";
 import { loadOrCreate, signDigest } from "@agentdir/agent";
 import { loadDeployment } from "./deployment.js";
@@ -25,8 +24,10 @@ export async function snapshot(args: { handle: string }) {
   if (!id.inftTokenId) throw new Error(`identity '${args.handle}' has no inftTokenId — mint first`);
 
   const pk = require_("PRIVATE_KEY");
-  const signer = makeSigner(pk, dep.rpcUrl);
-  const storage = new Storage({ signer });
+  // Single Wallet, single Provider — Storage and InftWriter both accept a Signer.
+  const provider = new ethers.JsonRpcProvider(dep.rpcUrl);
+  const wallet = new ethers.Wallet(pk, provider);
+  const storage = new Storage({ signer: wallet });
 
   const head = await new EnsResolver({ network: "sepolia" })
     .getRecordBundle(id.ensName)
@@ -34,8 +35,6 @@ export async function snapshot(args: { handle: string }) {
     .catch(() => null);
 
   const chain = new SnapshotChain(storage, null);
-  const provider = new ethers.JsonRpcProvider(dep.rpcUrl);
-  const wallet = new ethers.Wallet(pk, provider);
   const inft = new InftWriter({ contract: dep.AgentdirINFT.address, signer: wallet });
 
   const prevOnchain = await inft.getStateRoot(id.inftTokenId);

@@ -34,6 +34,13 @@ export type SnapshotBody = Omit<MemorySnapshot, "sig">;
 
 const stripHex = (h: string) => (h.startsWith("0x") ? h.slice(2) : h);
 
+const PUBKEY_RE = /^(0x)?[0-9a-fA-F]{64}$/;
+function assertPubkey(pubkey: string, ctx: string): void {
+  if (!PUBKEY_RE.test(pubkey)) {
+    throw new Error(`${ctx}: signerPubkey must be 32-byte hex (64 chars, optional 0x); got '${pubkey}'`);
+  }
+}
+
 export class SnapshotChain {
   // Serialize writes so concurrent rotations don't fork the chain.
   private _lock: Promise<unknown> = Promise.resolve();
@@ -84,6 +91,7 @@ export class SnapshotChain {
     repHead: string | null;
     signer: (digestHex: `0x${string}`) => Promise<string>;
   }) {
+    assertPubkey(input.signerPubkey, "SnapshotChain.append");
     const body: SnapshotBody = {
       v: 1,
       ensName: input.ensName,

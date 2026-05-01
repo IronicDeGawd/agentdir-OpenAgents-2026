@@ -135,6 +135,25 @@ test("snapshot signature fails under wrong pubkey", async () => {
   assert.equal(await SnapshotChain.verify(snapshot, otherHex), false);
 });
 
+test("append rejects garbage signerPubkey", async () => {
+  const { signer } = await makeSigner();
+  const chain = new SnapshotChain(new FakeStorage() as any);
+  await assert.rejects(
+    () =>
+      chain.append({
+        ensName: "x.eth",
+        signerPubkey: "not-hex",
+        inftTokenId: "1",
+        callsTotal: 0,
+        okTotal: 0,
+        skillStats: {},
+        repHead: null,
+        signer,
+      }),
+    /signerPubkey must be 32-byte hex/
+  );
+});
+
 test("walk stops on signature mismatch when verifyKey passed", async () => {
   const { pubHex, signer } = await makeSigner();
   const other = await ed.getPublicKeyAsync(ed.utils.randomPrivateKey());

@@ -31,11 +31,10 @@ export type StateUpdateEvent = {
   txHash: string;
 };
 
-const ZERO32 = "0x" + "00".repeat(32);
-
-/** rootHash from 0G Storage is `0x` + 64 hex (bytes32). Pass it through; throw otherwise. */
+/** rootHash from 0G Storage is `0x` + 64 hex (bytes32). Throws on empty/garbage —
+ *  silently zeroing on-chain state on a typo is worse than a hard error. */
 function asBytes32(root: string): string {
-  if (!root) return ZERO32;
+  if (!root) throw new Error("setStateRoot: empty rootHash");
   const h = root.startsWith("0x") ? root : "0x" + root;
   if (!/^0x[0-9a-fA-F]{64}$/.test(h)) throw new Error(`not bytes32: ${root}`);
   return h;
@@ -72,8 +71,16 @@ export class InftWriter {
   /** Rotate state root. Caller must own the token. Returns tx hash. */
   async setStateRoot(tokenId: string | number | bigint, newRoot: string): Promise<string> {
     if (!this.signer) throw new Error("setStateRoot requires signer");
+    const root32 = asBytes32(newRoot); // validate before any RPC.
+    // Pre-flight ownership check. Cheap eth_call beats a reverted tx that
+    // burns gas to tell us "NotTokenOwner".
+    const expected = (await this.signer.getAddress()).toLowerCase();
+    const owner = (await this.ownerOf(tokenId)).toLowerCase();
+    if (owner !== expected) {
+      throw new Error(`setStateRoot: signer ${expected} does not own token ${tokenId} (owner=${owner})`);
+    }
     const c = new ethers.Contract(this.contract, ABI, this.signer);
-    const tx = await c.setAgentStateRoot!(BigInt(tokenId), asBytes32(newRoot), {
+    const tx = await c.setAgentStateRoot!(BigInt(tokenId), root32, {
       gasPrice: this.gasPriceWei,
     });
     await tx.wait();
