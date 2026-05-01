@@ -1,4 +1,5 @@
 context/
+CLAUDE.*
 node_modules/
 dist/
 .env
@@ -17,3 +18,4 @@ private*.pem
 probes/*/.work/
 probes/*/.work-last.log
 .demo-work/
+
