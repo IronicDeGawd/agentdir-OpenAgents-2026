@@ -99,6 +99,104 @@ export class DirectCompute {
     return new DirectCompute(broker, opts.provider, meta.endpoint, meta.model);
   }
 
+  /**
+   * Stream tokens as they arrive from the provider. Yields content deltas
+   * (strings); on stream end, populates `lastTeeAttestation` exactly like
+   * `chat()`. Calls processResponse once after the final SSE chunk so fee
+   * settlement + TEE verification still happen.
+   *
+   * SSE format follows OpenAI: `data: {json}\n\n`, terminated by
+   * `data: [DONE]\n\n`. chatID priority: ZG-Res-Key header → `id` field
+   * on the first stream chunk that carries one.
+   */
+  async *stream(
+    messages: { role: "system" | "user" | "assistant"; content: string }[],
+    opts: DirectComputeChatOpts = {}
+  ): AsyncGenerator<string> {
+    const headers = await this.broker.inference.getRequestHeaders(this.provider);
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), opts.timeoutMs ?? 60_000);
+    let res: Response;
+    try {
+      res = await fetch(`${this.endpoint}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify({
+          model: this.model,
+          messages,
+          max_tokens: opts.maxTokens,
+          temperature: opts.temperature,
+          stream: true,
+        }),
+        signal: ac.signal,
+      });
+    } catch (e) {
+      clearTimeout(timer);
+      throw e;
+    }
+    if (!res.ok || !res.body) {
+      clearTimeout(timer);
+      const text = await res.text().catch(() => "");
+      throw new Error(`0G inference stream ${res.status}: ${text.slice(0, 300)}`);
+    }
+    const headerKey = res.headers.get("ZG-Res-Key") ?? res.headers.get("zg-res-key");
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let chatID = headerKey ?? "";
+    let lastUsage: unknown = undefined;
+    try {
+      // SSE framing: split on \n\n. Each event has one or more `data:` lines.
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let nl: number;
+        while ((nl = buffer.indexOf("\n\n")) !== -1) {
+          const event = buffer.slice(0, nl);
+          buffer = buffer.slice(nl + 2);
+          for (const line of event.split("\n")) {
+            if (!line.startsWith("data:")) continue;
+            const payload = line.slice(5).trim();
+            if (payload === "[DONE]") continue;
+            try {
+              const chunk: any = JSON.parse(payload);
+              if (!chatID && chunk.id) chatID = chunk.id;
+              if (chunk.usage) lastUsage = chunk.usage;
+              const delta = chunk.choices?.[0]?.delta?.content;
+              if (typeof delta === "string" && delta.length > 0) yield delta;
+            } catch {
+              // Drop non-JSON keepalives.
+            }
+          }
+        }
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+
+    let verified = false;
+    if (!chatID) {
+      // eslint-disable-next-line no-console
+      console.warn("[DirectCompute] stream: no ZG-Res-Key or chunk.id; skipping verification");
+    } else {
+      try {
+        const ok = await this.broker.inference.processResponse(
+          this.provider,
+          chatID,
+          lastUsage ? JSON.stringify(lastUsage) : undefined
+        );
+        verified = ok === undefined ? true : !!ok;
+      } catch (e: any) {
+        // eslint-disable-next-line no-console
+        console.error("[DirectCompute] stream processResponse failed:", e?.message ?? e);
+        verified = false;
+      }
+    }
+    this.lastTeeAttestation = { provider: this.provider, chatID, verified };
+  }
+
   async chat(
     messages: { role: "system" | "user" | "assistant"; content: string }[],
     opts: DirectComputeChatOpts = {}
