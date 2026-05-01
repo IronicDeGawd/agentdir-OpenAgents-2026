@@ -22,7 +22,10 @@ Commands:
 
   call --from alice --to <peerPubkey> --skill summarize --input '{"text":"..."}'
        [--axl-base http://127.0.0.1:9002] [--caller-inft <id>]
-      Send a signed skill request and print verified response.
+       [--pay <amount> --pay-recipient 0x... [--pay-network 11155111] [--pay-token 0x...]]
+      Send a signed skill request and print verified response. With --pay,
+      run a real KH Direct Execute USDC transfer first and attach the
+      signed receipt to the request envelope.
 
   rep --head <rootHash> [--limit 50] [--target <inftId>]
       Walk the reputation chain from head; optional success-rate score for target.
@@ -93,6 +96,10 @@ async function main() {
         input: f.input,
         axlBase: f["axl-base"],
         callerINFT: f["caller-inft"],
+        pay: f.pay,
+        payRecipient: f["pay-recipient"],
+        payNetwork: f["pay-network"],
+        payToken: f["pay-token"],
       });
       return;
     case "publish":

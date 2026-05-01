@@ -47,7 +47,7 @@ export const SUMMARIZE: RegisteredSkill = {
       type: "object",
       properties: { summary: { type: "string" } },
     },
-    pricing: { x402: { token: "USDC", chainId: 8453, amount: "10000" } }, // 0.01 USDC
+    pricing: { x402: { token: "USDC", chainId: 8453, amount: "0.01" } }, // 0.01 USDC (decimal)
   },
   handler: async (input: any, ctx) => {
     const { text } = input as { text: string };
@@ -80,7 +80,7 @@ export const SENTIMENT: RegisteredSkill = {
         label: { type: "string", enum: ["positive", "neutral", "negative"] },
       },
     },
-    pricing: { x402: { token: "USDC", chainId: 8453, amount: "5000" } }, // 0.005 USDC
+    pricing: { x402: { token: "USDC", chainId: 8453, amount: "0.005" } }, // 0.005 USDC (decimal)
   },
   handler: async (input: any, ctx) => {
     const { text } = input as { text: string };

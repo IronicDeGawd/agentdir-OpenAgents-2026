@@ -191,7 +191,140 @@ test("requirePayment rejects unpaid call", async () => {
   await agent.handleInbound(callerPubHex, JSON.stringify(newReq()));
   const sent = JSON.parse(axl.outbox[0]!.body);
   assert.equal(sent.ok, false);
-  assert.match(sent.error, /payment-required/);
+  assert.match(sent.error, /payment-rejected: no receipt/);
+});
+
+test("paid call: agent accepts a valid signed receipt", async () => {
+  const { signReceipt } = await import("@agentdir/sdk");
+  const axl = new FakeAxl();
+  const compute = new FakeCompute(["Paid summary."]);
+  const skills = new SkillRegistry().add(SUMMARIZE);
+  const recipient = "0x" + "11".repeat(20);
+  const tokenAddress = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";
+  const agent = new Agent({
+    identity: id,
+    axl: axl as any,
+    compute: compute as any,
+    skills,
+    requirePayment: true,
+    paymentExpectations: { recipient, tokenAddress, network: "11155111" },
+  });
+
+  const callerSigner = async (digestHex: `0x${string}`) => {
+    const msg = Buffer.from(digestHex.slice(2), "hex");
+    const sig = await ed.signAsync(msg, callerPriv);
+    return "0x" + Buffer.from(sig).toString("hex");
+  };
+  const receipt = await signReceipt(
+    {
+      v: 1,
+      kind: "kh-direct",
+      amount: "0.01",
+      tokenAddress,
+      tokenSymbol: "USDC",
+      network: "11155111",
+      recipient,
+      txHash: "0x" + "ab".repeat(32),
+      executionId: "exec_test",
+      callerPubkey: callerPubHex,
+      skill: "summarize",
+      ts: Math.floor(Date.now() / 1000),
+    },
+    callerSigner
+  );
+  await agent.handleInbound(callerPubHex, JSON.stringify(newReq({ payment: receipt })));
+  const sent = JSON.parse(axl.outbox[0]!.body);
+  assert.equal(sent.ok, true);
+  assert.equal((sent.output as any).summary, "Paid summary.");
+});
+
+test("paid call: agent rejects receipt with wrong recipient", async () => {
+  const { signReceipt } = await import("@agentdir/sdk");
+  const axl = new FakeAxl();
+  const skills = new SkillRegistry().add(SUMMARIZE);
+  const recipient = "0x" + "11".repeat(20);
+  const wrongRecipient = "0x" + "22".repeat(20);
+  const tokenAddress = "0x" + "33".repeat(20);
+  const agent = new Agent({
+    identity: id,
+    axl: axl as any,
+    compute: new FakeCompute([]) as any,
+    skills,
+    requirePayment: true,
+    paymentExpectations: { recipient, tokenAddress, network: "11155111" },
+  });
+  const callerSigner = async (digestHex: `0x${string}`) => {
+    const msg = Buffer.from(digestHex.slice(2), "hex");
+    const sig = await ed.signAsync(msg, callerPriv);
+    return "0x" + Buffer.from(sig).toString("hex");
+  };
+  const receipt = await signReceipt(
+    {
+      v: 1,
+      kind: "kh-direct",
+      amount: "0.01",
+      tokenAddress,
+      tokenSymbol: "USDC",
+      network: "11155111",
+      recipient: wrongRecipient,
+      txHash: "0x" + "ab".repeat(32),
+      executionId: "exec_test",
+      callerPubkey: callerPubHex,
+      skill: "summarize",
+      ts: Math.floor(Date.now() / 1000),
+    },
+    callerSigner
+  );
+  await agent.handleInbound(callerPubHex, JSON.stringify(newReq({ payment: receipt })));
+  const sent = JSON.parse(axl.outbox[0]!.body);
+  assert.equal(sent.ok, false);
+  assert.match(sent.error, /payment-rejected: recipient mismatch/);
+});
+
+test("paid call: agent rejects forged receipt sig", async () => {
+  const { signReceipt } = await import("@agentdir/sdk");
+  const axl = new FakeAxl();
+  const skills = new SkillRegistry().add(SUMMARIZE);
+  const recipient = "0x" + "11".repeat(20);
+  const tokenAddress = "0x" + "33".repeat(20);
+  const agent = new Agent({
+    identity: id,
+    axl: axl as any,
+    compute: new FakeCompute([]) as any,
+    skills,
+    requirePayment: true,
+    paymentExpectations: { recipient, tokenAddress, network: "11155111" },
+  });
+
+  // Sign with a DIFFERENT key than callerPubHex (caller pretends to be the
+  // real caller; receipt is signed by an attacker).
+  const attackerPriv = ed.utils.randomPrivateKey();
+  const attackerSigner = async (digestHex: `0x${string}`) => {
+    const msg = Buffer.from(digestHex.slice(2), "hex");
+    const sig = await ed.signAsync(msg, attackerPriv);
+    return "0x" + Buffer.from(sig).toString("hex");
+  };
+  const receipt = await signReceipt(
+    {
+      v: 1,
+      kind: "kh-direct",
+      amount: "0.01",
+      tokenAddress,
+      tokenSymbol: "USDC",
+      network: "11155111",
+      recipient,
+      txHash: "0x" + "ab".repeat(32),
+      executionId: "exec_test",
+      callerPubkey: callerPubHex,
+      skill: "summarize",
+      ts: Math.floor(Date.now() / 1000),
+    },
+    attackerSigner
+  );
+  await agent.handleInbound(callerPubHex, JSON.stringify(newReq({ payment: receipt })));
+  const sent = JSON.parse(axl.outbox[0]!.body);
+  assert.equal(sent.ok, false);
+  assert.match(sent.error, /payment-rejected: bad receipt sig/);
 });
 
 test("agent counts calls and per-skill stats", async () => {

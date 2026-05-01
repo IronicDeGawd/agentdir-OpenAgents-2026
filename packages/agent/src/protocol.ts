@@ -4,6 +4,8 @@
 // shape can be wrapped in MCP envelopes for the AXL multiplexer to route
 // directly, but our reference runtime polls /recv.
 
+import type { PaymentReceipt } from "@agentdir/sdk";
+
 export type SkillRequest = {
   v: 1;
   type: "skill.req";
@@ -12,8 +14,11 @@ export type SkillRequest = {
   ts: number; // unix ms; replay defense (server enforces freshness window)
   skill: string; // skill.id
   input: unknown;
-  // Optional payment intent — opaque to runtime; used by KH/x402 adapters.
-  payment?: { kind: "x402"; tx?: string };
+  // Optional payment receipt. When the responder requires payment, callers
+  // must populate this with a signed receipt produced by a PaymentAdapter.
+  // Receipt is opaque to AXL transport — the agent runtime cross-checks it
+  // against PaymentExpectations before invoking the skill handler.
+  payment?: PaymentReceipt;
   // Caller's iNFT (caller's identity for rep attestation).
   callerINFT?: string;
   // Caller's AXL pubkey — bound into responder sig domain.
