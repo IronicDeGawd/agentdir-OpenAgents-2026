@@ -217,6 +217,62 @@ test("stream() falls back to chunk.id when header missing", async () => {
   }
 });
 
+test("stream() handles CRLF-framed SSE", async () => {
+  const sse =
+    'data: {"id":"crlf-1","choices":[{"delta":{"content":"x"}}]}\r\n\r\n' +
+    "data: [DONE]\r\n\r\n";
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    const s = new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(new TextEncoder().encode(sse));
+        c.close();
+      },
+    });
+    return new Response(s, { status: 200 });
+  }) as any;
+  try {
+    const dc = makeStub();
+    const out: string[] = [];
+    for await (const t of dc.stream([{ role: "user", content: "hi" }])) out.push(t);
+    assert.equal(out.join(""), "x");
+    assert.equal(dc.lastTeeAttestation?.chatID, "crlf-1");
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
+
+test("stream() releases reader when consumer breaks early", async () => {
+  let cancelled = false;
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    const s = new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(new TextEncoder().encode(
+          'data: {"id":"early-1","choices":[{"delta":{"content":"a"}}]}\n\n'
+        ));
+        // Don't close — caller will break and we want to verify cancel fires.
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    return new Response(s, { status: 200 });
+  }) as any;
+  try {
+    const dc = makeStub();
+    for await (const t of dc.stream([{ role: "user", content: "hi" }])) {
+      assert.equal(t, "a");
+      break; // early exit
+    }
+    // Generator's finally must have called reader.cancel(), which cancels
+    // the underlying ReadableStream.
+    assert.equal(cancelled, true);
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
+
 test("stream() endpoint trailing slash trimmed in chat()/stream()", async () => {
   const dc = makeStub({}, "https://provider.example/v1///");
   // Verify the trim happened in the constructor.

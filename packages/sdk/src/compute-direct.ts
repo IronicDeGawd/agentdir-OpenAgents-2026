@@ -147,11 +147,12 @@ export class DirectCompute {
     let chatID = headerKey ?? "";
     let lastUsage: unknown = undefined;
     try {
-      // SSE framing: split on \n\n. Each event has one or more `data:` lines.
+      // SSE framing: events end in a blank line. Some proxies use CRLF;
+      // normalize to LF before splitting on \n\n.
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-        buffer += decoder.decode(value, { stream: true });
+        buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
         let nl: number;
         while ((nl = buffer.indexOf("\n\n")) !== -1) {
           const event = buffer.slice(0, nl);
@@ -174,6 +175,14 @@ export class DirectCompute {
       }
     } finally {
       clearTimeout(timer);
+      // Ensure the underlying socket is released even if the consumer
+      // breaks out of the generator early. Without this, the body stream
+      // and its socket leak.
+      try {
+        await reader.cancel();
+      } catch {
+        /* ignore — reader may already be done */
+      }
     }
 
     let verified = false;
