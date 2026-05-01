@@ -7,6 +7,7 @@
 import {
   createWalletClient,
   http,
+  fallback,
   type Hex,
   type WalletClient,
   type Account,
@@ -57,10 +58,23 @@ export class EnsWriter {
 
   constructor(opts: EnsWriterOpts) {
     this.account = privateKeyToAccount(opts.privateKey);
+    // Build a fallback chain: explicit opts.rpcUrl, then SEPOLIA_RPC_URL,
+    // then publicnode.com, then Alchemy if available. drpc.org rate-limits
+    // writes on free tier — keep it last/excluded.
+    const candidates = [
+      opts.rpcUrl,
+      process.env.SEPOLIA_RPC_URL,
+      "https://ethereum-sepolia-rpc.publicnode.com",
+      process.env.ALCHEMY_RPC_URL?.trim(),
+    ].filter((u): u is string => !!u && u.length > 0);
+    const transport =
+      candidates.length === 1
+        ? http(candidates[0])
+        : fallback(candidates.map((u) => http(u)), { rank: false });
     this.client = createWalletClient({
       account: this.account,
       chain: sepolia,
-      transport: http(opts.rpcUrl ?? "https://sepolia.drpc.org"),
+      transport,
     });
     this.resolver = opts.resolver ?? SEPOLIA_PUBLIC_RESOLVER;
   }
