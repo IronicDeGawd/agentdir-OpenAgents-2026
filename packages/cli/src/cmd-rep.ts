@@ -13,11 +13,20 @@ export async function rep(args: { head: string; limit?: number; target?: string 
   const list = await chain.walk(args.head, args.limit ?? 50);
   for (const a of list) {
     const sym = a.ok ? "✓" : "✗";
+    let teeFlag = "";
+    if (a.teeAttestation) {
+      teeFlag = a.teeAttestation.verified ? "  TEE✓" : "  TEE✗";
+    }
     console.log(
       `${sym}  ${new Date(a.ts * 1000).toISOString()}  ` +
         `caller=${a.callerINFT} → callee=${a.calleeINFT}  ` +
-        `skill=${a.skill}  latency=${a.latencyMs}ms`
+        `skill=${a.skill}  latency=${a.latencyMs}ms${teeFlag}`
     );
+    if (a.teeAttestation) {
+      console.log(
+        `       provider=${a.teeAttestation.provider}  chatID=${a.teeAttestation.chatID.slice(0, 16)}…`
+      );
+    }
   }
   if (args.target) {
     const s = RepChain.score(list, args.target);

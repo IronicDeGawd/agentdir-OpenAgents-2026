@@ -29,6 +29,7 @@ class FakeAxl {
 class FakeCompute {
   responses: string[];
   i = 0;
+  lastTeeAttestation: { provider: string; chatID: string; verified: boolean } | null = null;
   constructor(responses: string[]) { this.responses = responses; }
   async chat() { return { text: this.responses[this.i++] ?? "fallback", raw: {} }; }
   async *stream(): AsyncGenerator<string> { yield "x"; }
@@ -414,6 +415,58 @@ test("snapshotNow uploads + signs blob", async () => {
   assert.equal(storage.n, 1);
   const { SnapshotChain: SC } = await import("@agentdir/sdk");
   assert.equal(await SC.verify(result!.snapshot, id.axlPubkeyHex), true);
+});
+
+test("agent threads TEE attestation from compute into rep entry", async () => {
+  const axl = new FakeAxl();
+  // FakeCompute with a TEE attestation populated, like DirectCompute would.
+  class TeeCompute extends FakeCompute {
+    lastTeeAttestation = {
+      provider: "0xa48f01287233509FD694a22Bf840225062E67836",
+      chatID: "chat-abc-123",
+      verified: true,
+    };
+  }
+  const compute = new TeeCompute(["TEE summary."]);
+  const skills = new SkillRegistry().add(SUMMARIZE);
+  const storage = new FakeStorage();
+  const { RepChain } = await import("@agentdir/sdk");
+  const rep = new RepChain(storage as any);
+  const agent = new Agent({
+    identity: id,
+    axl: axl as any,
+    compute: compute as any,
+    storage: storage as any,
+    rep,
+    skills,
+  });
+  await agent.handleInbound(callerPubHex, JSON.stringify(newReq()));
+  assert.equal(storage.n, 1);
+  const att: any = [...storage.map.values()][0];
+  assert.ok(att.teeAttestation, "att.teeAttestation populated");
+  assert.equal(att.teeAttestation.verified, true);
+  assert.equal(att.teeAttestation.chatID, "chat-abc-123");
+  assert.equal(att.teeAttestation.provider, "0xa48f01287233509FD694a22Bf840225062E67836");
+});
+
+test("agent omits teeAttestation when compute is Router-mode (lastTeeAttestation null)", async () => {
+  const axl = new FakeAxl();
+  const compute = new FakeCompute(["Router summary."]); // lastTeeAttestation undefined → ?? null
+  const skills = new SkillRegistry().add(SUMMARIZE);
+  const storage = new FakeStorage();
+  const { RepChain } = await import("@agentdir/sdk");
+  const rep = new RepChain(storage as any);
+  const agent = new Agent({
+    identity: id,
+    axl: axl as any,
+    compute: compute as any,
+    storage: storage as any,
+    rep,
+    skills,
+  });
+  await agent.handleInbound(callerPubHex, JSON.stringify(newReq()));
+  const att: any = [...storage.map.values()][0];
+  assert.equal(att.teeAttestation, undefined);
 });
 
 test("rep chain receives one attestation per call", async () => {

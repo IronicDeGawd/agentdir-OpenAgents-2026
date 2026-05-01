@@ -7,6 +7,7 @@ import { keccak256, toHex } from "viem";
 import {
   AxlClient,
   Compute,
+  DirectCompute,
   InftWriter,
   RepChain,
   SnapshotChain,
@@ -17,6 +18,7 @@ import {
   type MemorySnapshot,
   type PaymentExpectations,
   type SkillStats,
+  type TeeInferenceAttestation,
 } from "@agentdir/sdk";
 import type { AgentIdentity } from "./identity.js";
 import { signDigest } from "./identity.js";
@@ -31,7 +33,7 @@ import {
 export type AgentOpts = {
   identity: AgentIdentity;
   axl: AxlClient;
-  compute: Compute;
+  compute: Compute | DirectCompute;
   storage?: Storage; // optional — required to write rep attestations
   rep?: RepChain;
   skills: SkillRegistry;
@@ -247,12 +249,19 @@ export class Agent {
       await this.replyOk(fromPubkey, req, output);
     }
 
+    // Capture the most recent TEE attestation from compute (DirectCompute
+    // populates this; Router-mode Compute leaves it null). The agent runtime
+    // is the right layer to thread this into the rep attestation since
+    // skill handlers shouldn't have to know about reputation plumbing.
+    const teeAttestation = this.opts.compute.lastTeeAttestation ?? undefined;
+
     // Attest. Even failed calls get attested so reputation reflects reliability.
     await this.attest({
       callerINFT: req.callerINFT ?? "0",
       ok,
       latencyMs: Date.now() - t0,
       skill: req.skill,
+      teeAttestation,
     });
 
     this.bumpStats(req.skill, ok);
@@ -396,6 +405,7 @@ export class Agent {
     ok: boolean;
     latencyMs: number;
     skill: string;
+    teeAttestation?: TeeInferenceAttestation;
   }): Promise<void> {
     if (!this.opts.rep) return;
     const calleeINFT = this.opts.identity.inftTokenId ?? "0";
@@ -405,6 +415,7 @@ export class Agent {
       skill: input.skill,
       ok: input.ok,
       latencyMs: input.latencyMs,
+      teeAttestation: input.teeAttestation,
       signer: (digest) => signDigest(this.opts.identity, digest),
     });
   }

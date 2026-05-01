@@ -61,6 +61,7 @@ export class RepChain {
       latencyMs: input.latencyMs,
       ts: Math.floor(Date.now() / 1000),
       prevRoot: this.head,
+      ...(input.teeAttestation ? { teeAttestation: input.teeAttestation } : {}),
     };
     const sig = await input.signer(RepChain.digest(base));
     const att: RepAttestation = { ...base, sig };
