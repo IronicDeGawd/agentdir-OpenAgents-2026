@@ -220,11 +220,27 @@ export class Agent {
    * Force an immediate snapshot. Uploads memory blob to 0G Storage, then
    * (if InftWriter present) anchors root on-chain via setAgentStateRoot.
    * Returns the new snapshot rootHash (or null if no snapshot chain configured).
+   *
+   * On first call after process start, seeds the snapshot chain head from
+   * the on-chain prev root so the chain stays linked across restarts.
    */
   async snapshotNow(): Promise<{ root: string; snapshot: MemorySnapshot; txHash?: string } | null> {
     if (!this.opts.snapshots) return null;
     const tokenId = this.opts.identity.inftTokenId;
     if (!tokenId) throw new Error("identity.inftTokenId required for snapshot");
+
+    // Seed chain head from on-chain root if our local chain is empty AND
+    // the contract has a non-zero prev root. Prevents fork on agent restart.
+    if (this.opts.snapshots.head === null && this.opts.inft) {
+      try {
+        const prev = await this.opts.inft.getStateRoot(tokenId);
+        const ZERO = "0x" + "00".repeat(32);
+        if (prev && prev !== ZERO) this.opts.snapshots.head = prev;
+      } catch {
+        // RPC failure is non-fatal — proceed as genesis.
+      }
+    }
+
     const repHead = this.opts.rep?.head ?? null;
     const { root, snapshot } = await this.opts.snapshots.append({
       ensName: this.opts.identity.ensName,

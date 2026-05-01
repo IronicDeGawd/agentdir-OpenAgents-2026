@@ -31,16 +31,19 @@ export async function stateHistory(args: { handle: string; limit?: number; verif
   const slice = events.slice(-limit).reverse(); // newest first
   console.log(`[state-history] ${events.length} total events, showing ${slice.length}:\n`);
 
+  // Hoist storage client outside the loop — one provider, one signer.
+  // Only built when --verify is set (no need for a signer just to print events).
+  const storage = args.verify
+    ? new Storage({ signer: makeSigner(require_("PRIVATE_KEY"), dep.rpcUrl) })
+    : null;
+
   for (const ev of slice) {
     console.log(`  block ${ev.blockNumber}  by ${ev.by}`);
     console.log(`    prev:    ${ev.prevRoot}`);
     console.log(`    new:     ${ev.newRoot}`);
     console.log(`    tx:      ${ev.txHash}`);
 
-    if (args.verify && ev.newRoot !== ZERO) {
-      const pk = require_("PRIVATE_KEY");
-      const signer = makeSigner(pk, dep.rpcUrl);
-      const storage = new Storage({ signer });
+    if (storage && ev.newRoot !== ZERO) {
       try {
         const snap = await storage.getJson<any>(ev.newRoot);
         const ok = await SnapshotChain.verify(snap, id.axlPubkeyHex);

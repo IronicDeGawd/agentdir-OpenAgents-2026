@@ -236,6 +236,32 @@ test("snapshotEvery triggers rotation after threshold", async () => {
   assert.equal(blob.inftTokenId, "1");
 });
 
+test("snapshotNow seeds chain head from on-chain root on first call", async () => {
+  const axl = new FakeAxl();
+  const compute = new FakeCompute([]);
+  const skills = new SkillRegistry();
+  const storage = new FakeStorage();
+  const { SnapshotChain } = await import("@agentdir/sdk");
+  const snapshots = new SnapshotChain(storage as any);
+  const FAKE_PREV = "0x" + "ab".repeat(32);
+  const fakeInft = {
+    getStateRoot: async () => FAKE_PREV,
+    setStateRoot: async () => "0xtxhash",
+  };
+  const agent = new Agent({
+    identity: id,
+    axl: axl as any,
+    compute: compute as any,
+    skills,
+    snapshots,
+    inft: fakeInft as any,
+  });
+  const result = await agent.snapshotNow();
+  assert.ok(result);
+  assert.equal(result!.snapshot.prevSnapshotRoot, FAKE_PREV);
+  assert.equal(result!.txHash, "0xtxhash");
+});
+
 test("snapshotNow uploads + signs blob", async () => {
   const axl = new FakeAxl();
   const compute = new FakeCompute([]);
