@@ -12,7 +12,10 @@ import {
   SnapshotChain,
   Storage,
   canonicalJson,
+  checkReceiptShape,
+  verifyReceipt,
   type MemorySnapshot,
+  type PaymentExpectations,
   type SkillStats,
 } from "@agentdir/sdk";
 import type { AgentIdentity } from "./identity.js";
@@ -44,6 +47,17 @@ export type AgentOpts = {
   inft?: InftWriter;
   /** Auto-snapshot every N successful calls. 0 disables (default). */
   snapshotEvery?: number;
+  /** Payment receipt expectations (skill pricing comes from skill.def). */
+  paymentExpectations?: {
+    /** Callee's EVM address — recipient field on receipt. */
+    recipient: string;
+    /** Token address (ERC-20) we expect payment in. */
+    tokenAddress: string;
+    /** Chain id, decimal string. */
+    network: string;
+    /** Receipt freshness window in ms. Default 5 min. */
+    maxAgeMs?: number;
+  };
 };
 
 export class Agent {
@@ -137,6 +151,49 @@ export class Agent {
     return null;
   }
 
+  /**
+   * Verify the payment receipt on a request. Returns null on pass, or a
+   * short reason on rejection. Three things are checked:
+   *   1. Receipt is present.
+   *   2. Receipt body matches expectations (amount, token, network,
+   *      recipient, callerPubkey, skill, freshness).
+   *   3. ed25519 sig over the receipt body verifies under callerPubkey.
+   *
+   * NOTE: We do NOT do an onchain readback in v1. The KH execution returned
+   * a real tx, the caller signed the receipt referencing that tx, and the
+   * sig binds the receipt to the AXL identity that the rest of the call
+   * is bound to. Onchain readback can be layered on without protocol change.
+   */
+  private async checkPayment(
+    req: SkillRequest,
+    reg: RegisteredSkill,
+    pricing?: { token: string; chainId: number; amount: string }
+  ): Promise<string | null> {
+    if (!req.payment) return "no receipt";
+    const exp = this.opts.paymentExpectations;
+    if (!exp) return "agent missing paymentExpectations config";
+
+    // Pricing came from the skill def if present; else fall back to
+    // any single advertised price (can't cross-check amount otherwise).
+    const expectedAmount = pricing?.amount ?? req.payment.amount;
+    const expectedToken = pricing?.token === "USDC" ? exp.tokenAddress : exp.tokenAddress;
+
+    const expectations: PaymentExpectations = {
+      amount: expectedAmount,
+      tokenAddress: expectedToken,
+      network: exp.network,
+      recipient: exp.recipient,
+      callerPubkey: req.callerPubkey,
+      skill: reg.def.id,
+      maxAgeMs: exp.maxAgeMs,
+    };
+    const shapeErr = checkReceiptShape(req.payment, expectations);
+    if (shapeErr) return shapeErr;
+    const sigOk = await verifyReceipt(req.payment, req.callerPubkey);
+    if (!sigOk) return "bad receipt sig";
+    return null;
+  }
+
   private async handleSkillRequest(fromPubkey: string, req: SkillRequest): Promise<void> {
     const t0 = Date.now();
     const stale = this.rejectStale(req);
@@ -157,9 +214,19 @@ export class Agent {
       await this.replyErr(fromPubkey, req, `unknown skill: ${req.skill}`);
       return;
     }
-    if (this.opts.requirePayment && !req.payment) {
-      await this.replyErr(fromPubkey, req, "payment-required");
-      return;
+    // Payment gate. Enforced only when requirePayment is set; pricing on
+    // the skill def is advertisement, not policy. When enforced, the
+    // expected amount comes from the skill's pricing.x402 field if present,
+    // else the receipt's amount is accepted as-is (no upper bound check).
+    if (this.opts.requirePayment === true) {
+      const pricing = (reg.def.pricing as any)?.x402 as
+        | { token: string; chainId: number; amount: string }
+        | undefined;
+      const reason = await this.checkPayment(req, reg, pricing);
+      if (reason) {
+        await this.replyErr(fromPubkey, req, `payment-rejected: ${reason}`);
+        return;
+      }
     }
     const inputErr = this.validateInput(reg, req.input);
     if (inputErr) {
