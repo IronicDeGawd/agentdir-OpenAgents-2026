@@ -6,6 +6,8 @@ import { mint } from "./cmd-mint.js";
 import { call } from "./cmd-call.js";
 import { rep } from "./cmd-rep.js";
 import { publish } from "./cmd-publish.js";
+import { snapshot } from "./cmd-snapshot.js";
+import { stateHistory } from "./cmd-state-history.js";
 
 loadEnv();
 
@@ -29,6 +31,14 @@ Commands:
       Publish the agentdir text-record bundle (a2a-card, axl pubkey,
       iNFT pointer, rep head) to Sepolia ENS via the PublicResolver.
       Requires PRIVATE_KEY to own the name.
+
+  snapshot --handle alice
+      Manual memory snapshot rotation: serialize agent state to 0G Storage
+      and anchor rootHash on the iNFT via setAgentStateRoot.
+
+  state-history --handle alice [--limit 20] [--verify]
+      Walk AgentStateUpdated events for the agent's iNFT. With --verify,
+      download each snapshot blob and check the agent's signature.
 
 Env (read from .env.local at repo root):
   PRIVATE_KEY        EVM key for on-chain ops + 0G storage uploads
@@ -98,6 +108,24 @@ async function main() {
         process.exit(2);
       }
       await rep({ head: f.head, limit: f.limit ? parseInt(f.limit, 10) : undefined, target: f.target });
+      return;
+    case "snapshot":
+      if (!f.handle) {
+        console.error("snapshot requires --handle");
+        process.exit(2);
+      }
+      await snapshot({ handle: f.handle });
+      return;
+    case "state-history":
+      if (!f.handle) {
+        console.error("state-history requires --handle");
+        process.exit(2);
+      }
+      await stateHistory({
+        handle: f.handle,
+        limit: f.limit ? parseInt(f.limit, 10) : undefined,
+        verify: f.verify === "true",
+      });
       return;
     default:
       console.error(`unknown command: ${cmd}`);
