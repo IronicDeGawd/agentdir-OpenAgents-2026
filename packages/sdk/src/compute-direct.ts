@@ -23,6 +23,8 @@ import type { Wallet, JsonRpcSigner } from "ethers";
 export type DirectComputeChatOpts = {
   maxTokens?: number;
   temperature?: number;
+  /** Abort the upstream fetch after this many ms. Default 60s. */
+  timeoutMs?: number;
 };
 
 export type TeeAttestation = {
@@ -67,7 +69,8 @@ export class DirectCompute {
   private constructor(broker: any, provider: string, endpoint: string, model: string) {
     this.broker = broker;
     this.provider = provider;
-    this.endpoint = endpoint;
+    // Trim trailing slash so `${endpoint}/chat/completions` never doubles up.
+    this.endpoint = endpoint.replace(/\/+$/, "");
     this.model = model;
   }
 
@@ -109,11 +112,19 @@ export class DirectCompute {
       max_tokens: opts.maxTokens,
       temperature: opts.temperature,
     };
-    const res = await fetch(`${this.endpoint}/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...headers },
-      body: JSON.stringify(body),
-    });
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), opts.timeoutMs ?? 60_000);
+    let res: Response;
+    try {
+      res = await fetch(`${this.endpoint}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify(body),
+        signal: ac.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
     if (!res.ok) {
       const text = await res.text().catch(() => "");
       throw new Error(`0G inference ${res.status}: ${text.slice(0, 300)}`);
@@ -124,23 +135,30 @@ export class DirectCompute {
     const chatID = headerKey ?? data.id ?? "";
 
     let verified = false;
-    try {
-      const ok = await this.broker.inference.processResponse(
-        this.provider,
-        chatID,
-        data.usage ? JSON.stringify(data.usage) : undefined
-      );
-      // Some broker versions return true/false; some return void on success
-      // and throw on failure. Treat undefined-without-throw as verified.
-      verified = ok === undefined ? true : !!ok;
-    } catch (e: any) {
-      // Settlement / verification failed. The text is still legible to the
-      // caller, but the attestation is now verified=false. Caller decides
-      // whether to use the output anyway (the agent runtime does — and
-      // surfaces verified=false in the rep attestation).
+    if (!chatID) {
+      // No identifier we can submit to processResponse → cannot validate.
+      // Skip the broker call rather than feed it garbage.
       // eslint-disable-next-line no-console
-      console.error("[DirectCompute] processResponse failed:", e?.message ?? e);
-      verified = false;
+      console.warn("[DirectCompute] no ZG-Res-Key header or data.id; skipping verification");
+    } else {
+      try {
+        const ok = await this.broker.inference.processResponse(
+          this.provider,
+          chatID,
+          data.usage ? JSON.stringify(data.usage) : undefined
+        );
+        // Some broker versions return true/false; some return void on success
+        // and throw on failure. Treat undefined-without-throw as verified.
+        verified = ok === undefined ? true : !!ok;
+      } catch (e: any) {
+        // Settlement / verification failed. The text is still legible to the
+        // caller, but the attestation is now verified=false. Caller decides
+        // whether to use the output anyway (the agent runtime does — and
+        // surfaces verified=false in the rep attestation).
+        // eslint-disable-next-line no-console
+        console.error("[DirectCompute] processResponse failed:", e?.message ?? e);
+        verified = false;
+      }
     }
 
     const text = data.choices?.[0]?.message?.content ?? "";
