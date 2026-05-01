@@ -1,0 +1,23 @@
+{
+  "name": "@agentdir/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "agentdir": "./src/main.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "cli": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "@agentdir/agent": "workspace:*",
+    "@agentdir/sdk": "workspace:*",
+    "ethers": "^6.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
