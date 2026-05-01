@@ -25,6 +25,13 @@ export {
   type StateUpdateEvent,
 } from "./inft.js";
 export {
+  type RouteHop,
+  type RoutingEntry,
+  type RoutingTable,
+  type RouteSkillInput,
+  type RouteSkillOutput,
+} from "./swarm.js";
+export {
   KhDirectExecuteAdapter,
   signReceipt,
   verifyReceipt,

@@ -1,12 +1,25 @@
 // Skill registry. Each skill = {def, handler}. Pluggable per agent.
-import type { Compute, DirectCompute } from "@agentdir/sdk";
-import type { Skill } from "@agentdir/sdk";
+import type { Compute, DirectCompute, AxlClient, RoutingTable } from "@agentdir/sdk";
+import type { Skill, RouteSkillInput, RouteSkillOutput, RouteHop } from "@agentdir/sdk";
+import { callSkill } from "./caller.js";
 
 /** Compute that skill handlers see. Either Router (Compute) or
  *  TEE-direct (DirectCompute). Both expose `chat({...})` and
  *  `lastTeeAttestation` so the agent runtime can read attestation
  *  metadata without an instanceof check. */
-export type SkillCtx = { compute: Compute | DirectCompute };
+export type SkillCtx = {
+  compute: Compute | DirectCompute;
+  /** Present only when the agent runtime is configured for swarm
+   *  routing (AgentOpts.swarm). The `route` skill uses these. */
+  swarm?: {
+    axl: AxlClient;
+    /** Caller AXL pubkey hex used as `callerPubkey` on outbound hops. */
+    callerPubkey: string;
+    /** Hex caller signer for outbound hops (re-uses identity sign). */
+    callerINFT?: string;
+    routingTable: RoutingTable;
+  };
+};
 export type SkillHandler<I = unknown, O = unknown> = (
   input: I,
   ctx: SkillCtx
@@ -103,5 +116,110 @@ export const SENTIMENT: RegisteredSkill = {
     if (label !== "positive" && label !== "neutral" && label !== "negative")
       return { label: "neutral" };
     return { label };
+  },
+};
+
+// ── Swarm: route skill ──────────────────────────────────────────────
+//
+// `route` is a meta-skill. It takes a tag + payload + hopBudget,
+// looks up the downstream agent in ctx.swarm.routingTable, calls that
+// agent's actual skill, and returns the downstream output along with a
+// RouteHop record. Each hop is itself a fully signed SkillRequest, so
+// the entire trace is independently verifiable.
+//
+// Hop budget hits 0 → handler refuses to forward (prevents cycles).
+
+export const ROUTE: RegisteredSkill = {
+  def: {
+    id: "route",
+    name: "route",
+    description: "forward a request to a downstream agent based on tag",
+    tags: ["meta", "routing"],
+    inputSchema: {
+      type: "object",
+      required: ["tag"],
+      properties: {
+        tag: { type: "string", maxLength: 64 },
+        payload: {},
+        hopBudget: { type: "number" },
+      },
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        output: {},
+        trace: { type: "array" },
+      },
+    },
+  },
+  handler: async (input: any, ctx): Promise<RouteSkillOutput> => {
+    const { tag, payload, hopBudget = 3 } = input as RouteSkillInput;
+    if (!ctx.swarm) {
+      throw new Error("agent has no swarm config — cannot route");
+    }
+    if (hopBudget <= 0) {
+      throw new Error("hop budget exhausted");
+    }
+    const route = ctx.swarm.routingTable[tag];
+    if (!route) {
+      throw new Error(`no route for tag '${tag}'`);
+    }
+
+    // If forwarding to another router, propagate decremented budget so
+    // chains don't loop forever. Non-route downstreams ignore this.
+    const forwardedInput =
+      route.skill === "route"
+        ? { ...(payload as object), hopBudget: hopBudget - 1 }
+        : payload;
+
+    const t0 = Date.now();
+    let res;
+    try {
+      res = await callSkill({
+        axl: ctx.swarm.axl,
+        destPubkey: route.destPubkey,
+        callerPubkey: ctx.swarm.callerPubkey,
+        skill: route.skill,
+        input: forwardedInput,
+        callerINFT: ctx.swarm.callerINFT,
+      });
+    } catch (e: any) {
+      // Surface the failure in the trace then rethrow so the outer
+      // SkillResponse path sees an error too. Caller gets a signed
+      // failure; the failed hop is now visible in audit logs.
+      const failedHop: RouteHop = {
+        from: ctx.swarm.callerPubkey,
+        to: route.destPubkey,
+        skill: route.skill,
+        ok: false,
+        latencyMs: Date.now() - t0,
+        ...(route.ens ? { responderEns: route.ens } : {}),
+      };
+      throw new Error(
+        `route hop failed: ${e?.message ?? e} (trace: ${JSON.stringify([failedHop])})`
+      );
+    }
+    const hop: RouteHop = {
+      from: ctx.swarm.callerPubkey,
+      to: route.destPubkey,
+      skill: route.skill,
+      ok: true,
+      latencyMs: Date.now() - t0,
+      ...(route.ens ? { responderEns: route.ens } : {}),
+    };
+
+    // If the downstream itself returned a swarm trace (route → route),
+    // splice the traces so the caller sees the full path.
+    const downstream = res.output as Partial<RouteSkillOutput> | unknown;
+    const isNestedRoute =
+      downstream &&
+      typeof downstream === "object" &&
+      Array.isArray((downstream as any).trace);
+    const trace: RouteHop[] = isNestedRoute
+      ? [hop, ...((downstream as RouteSkillOutput).trace ?? [])]
+      : [hop];
+    const output = isNestedRoute ? (downstream as RouteSkillOutput).output : res.output;
+
+    return { output, trace };
   },
 };
