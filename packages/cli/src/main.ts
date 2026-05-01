@@ -5,6 +5,7 @@ import { whoami } from "./cmd-whoami.js";
 import { mint } from "./cmd-mint.js";
 import { call } from "./cmd-call.js";
 import { rep } from "./cmd-rep.js";
+import { publish } from "./cmd-publish.js";
 
 loadEnv();
 
@@ -23,6 +24,11 @@ Commands:
 
   rep --head <rootHash> [--limit 50] [--target <inftId>]
       Walk the reputation chain from head; optional success-rate score for target.
+
+  publish --handle alice --ens alice.somename.eth [--rep-head <root>]
+      Publish the agentdir text-record bundle (a2a-card, axl pubkey,
+      iNFT pointer, rep head) to Sepolia ENS via the PublicResolver.
+      Requires PRIVATE_KEY to own the name.
 
 Env (read from .env.local at repo root):
   PRIVATE_KEY        EVM key for on-chain ops + 0G storage uploads
@@ -78,6 +84,13 @@ async function main() {
         axlBase: f["axl-base"],
         callerINFT: f["caller-inft"],
       });
+      return;
+    case "publish":
+      if (!f.handle || !f.ens) {
+        console.error("publish requires --handle and --ens");
+        process.exit(2);
+      }
+      await publish({ handle: f.handle, ens: f.ens, repHead: f["rep-head"] });
       return;
     case "rep":
       if (!f.head) {

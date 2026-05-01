@@ -7,10 +7,25 @@ Local-first CLI tying SDK + agent + contracts together.
 ```
 agentdir whoami [--handle alice]
 agentdir mint --handle alice --ens alice.agentdir.eth [--uri ...]
+agentdir publish --handle alice --ens alice.<name>.eth [--rep-head <root>]
 agentdir call --from alice --to <peerPubkey> --skill summarize \
   --input '{"text":"..."}' [--axl-base http://127.0.0.1:9002]
 agentdir rep --head <rootHash> [--limit 50] [--target <inftId>]
 ```
+
+### `publish` setup
+
+`publish` calls `setText` on the Sepolia PublicResolver
+(`0xE99638b40E4Fff0129D56f03b55b6bbC4BBE49b5`). Requires `PRIVATE_KEY` to
+own the ENS name. To get one:
+
+1. Open https://sepolia.app.ens.domains and connect with the wallet whose
+   key sits in `.env.local`.
+2. Register a name (e.g. `agentdir-test.eth`) — costs minimal Sepolia ETH.
+3. After registration, run `agentdir publish --handle alice --ens
+   alice.agentdir-test.eth` (or use the bare name).
+4. Records become resolvable globally — verify with
+   `pnpm probe:ens` against your name.
 
 ## Demo (two agents on one machine)
 
