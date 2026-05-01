@@ -8,6 +8,7 @@ import { rep } from "./cmd-rep.js";
 import { publish } from "./cmd-publish.js";
 import { snapshot } from "./cmd-snapshot.js";
 import { stateHistory } from "./cmd-state-history.js";
+import { directory } from "./cmd-directory.js";
 
 loadEnv();
 
@@ -42,6 +43,11 @@ Commands:
   state-history --handle alice [--limit 20] [--verify]
       Walk AgentStateUpdated events for the agent's iNFT. With --verify,
       download each snapshot blob and check the agent's signature.
+
+  directory --skill <id> [--min-score 0.0] [--limit 10] [--lookback 50]
+            [--seed alice.agentdir.eth,bob.agentdir.eth]
+      Rank agentdir agents serving <skill> by confidence-weighted
+      reputation score (success ratio × min(samples, lookback)/lookback).
 
 Env (read from .env.local at repo root):
   PRIVATE_KEY        EVM key for on-chain ops + 0G storage uploads
@@ -132,6 +138,19 @@ async function main() {
         handle: f.handle,
         limit: f.limit ? parseInt(f.limit, 10) : undefined,
         verify: f.verify === "true",
+      });
+      return;
+    case "directory":
+      if (!f.skill) {
+        console.error("directory requires --skill <id>");
+        process.exit(2);
+      }
+      await directory({
+        skill: f.skill,
+        minScore: f["min-score"] ? parseFloat(f["min-score"]) : undefined,
+        limit: f.limit ? parseInt(f.limit, 10) : undefined,
+        lookback: f.lookback ? parseInt(f.lookback, 10) : undefined,
+        seed: f.seed,
       });
       return;
     default:
