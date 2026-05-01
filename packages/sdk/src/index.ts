@@ -17,3 +17,16 @@ export {
   type InftWriterOpts,
   type StateUpdateEvent,
 } from "./inft.js";
+export {
+  KhDirectExecuteAdapter,
+  signReceipt,
+  verifyReceipt,
+  receiptDigest,
+  checkReceiptShape,
+  type PaymentAdapter,
+  type PaymentReceipt,
+  type PaymentReceiptBody,
+  type PaymentExpectations,
+  type SettleArgs,
+  type KhDirectExecuteAdapterOpts,
+} from "./payments.js";
