@@ -1,1 +1,0 @@
-{ "PrivateKeyPath": "/Users/adityasrivastava/Project/EthGlobalOpenAgents/.demo-work/bob-axl.pem",   "Peers": ["tls://127.0.0.1:9201"],            "api_port": 9112, "tcp_port": 7100 }

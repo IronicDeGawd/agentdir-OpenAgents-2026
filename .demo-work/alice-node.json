@@ -1,1 +1,0 @@
-{ "PrivateKeyPath": "/Users/adityasrivastava/Project/EthGlobalOpenAgents/.demo-work/alice-axl.pem", "Peers": [], "Listen": ["tls://0.0.0.0:9201"], "api_port": 9102, "tcp_port": 7100 }
