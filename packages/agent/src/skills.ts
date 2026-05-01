@@ -1,8 +1,12 @@
 // Skill registry. Each skill = {def, handler}. Pluggable per agent.
-import type { Compute } from "@agentdir/sdk";
+import type { Compute, DirectCompute } from "@agentdir/sdk";
 import type { Skill } from "@agentdir/sdk";
 
-export type SkillCtx = { compute: Compute };
+/** Compute that skill handlers see. Either Router (Compute) or
+ *  TEE-direct (DirectCompute). Both expose `chat({...})` and
+ *  `lastTeeAttestation` so the agent runtime can read attestation
+ *  metadata without an instanceof check. */
+export type SkillCtx = { compute: Compute | DirectCompute };
 export type SkillHandler<I = unknown, O = unknown> = (
   input: I,
   ctx: SkillCtx
