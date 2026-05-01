@@ -97,4 +97,40 @@ export class RepChain {
     const n = filtered.length;
     return { n, ok, ratio: n === 0 ? 0 : ok / n };
   }
+
+  /**
+   * Skill-filtered, confidence-weighted score for ranking. Used by the
+   * directory to sort agents serving a given skill.
+   *
+   * Caller must pass `attestations` newest-first (this is what
+   * `RepChain.walk` already returns). The function takes the first
+   * `lookback` matching entries and rolls them into a single score.
+   *
+   * Returns:
+   *   - n          attestations matching (callee, optional skill) inside the window
+   *   - ok         successful subset
+   *   - ratio      raw success ratio (ok/n, or 0 when n=0)
+   *   - score      [0,1]: ratio weighted by min(n, lookback) / lookback
+   *                so a 1/1 history doesn't outrank a 9/10 history with 10
+   *                samples — denominator-of-confidence.
+   */
+  static scoreFor(
+    attestations: RepAttestation[],
+    targetINFT: string,
+    opts: { skill?: string; lookback?: number } = {}
+  ): { n: number; ok: number; ratio: number; score: number } {
+    const lookback = opts.lookback ?? 50;
+    const filtered = attestations
+      .filter((a) => a.calleeINFT === targetINFT)
+      .filter((a) => (opts.skill ? a.skill === opts.skill : true))
+      .slice(0, lookback);
+    const ok = filtered.filter((a) => a.ok).length;
+    const n = filtered.length;
+    const ratio = n === 0 ? 0 : ok / n;
+    // Confidence factor pulls thin samples toward 0; with lookback=10 a
+    // 1/1 history scores 0.1, while 10/10 scores 1.0. Prevents one-shot
+    // newcomers from outranking established agents.
+    const confidence = Math.min(n, lookback) / lookback;
+    return { n, ok, ratio, score: ratio * confidence };
+  }
 }

@@ -1,6 +1,12 @@
 export * from "./types.js";
 export * from "./agent-card.js";
 export { EnsResolver, type EnsClientOpts } from "./ens.js";
+export {
+  Directory,
+  type DirectoryOpts,
+  type DirectoryQuery,
+  type DirectoryEntry,
+} from "./directory.js";
 export { EnsWriter, type EnsWriterOpts } from "./ens-writer.js";
 export { AxlClient, type Topology } from "./axl.js";
 export { Storage, makeSigner, type StorageOpts } from "./storage.js";
