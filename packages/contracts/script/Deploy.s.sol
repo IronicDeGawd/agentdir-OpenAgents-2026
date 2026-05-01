@@ -8,9 +8,9 @@ contract Deploy is Script {
     /// @dev Set ALLOW_CHAIN env var to skip the chain assertion.
     function run() external {
         if (vm.envOr("ALLOW_CHAIN", uint256(0)) == 0) {
-            // 0G Galileo testnet only. Override with ALLOW_CHAIN=1 if you
-            // really want to deploy elsewhere.
-            require(block.chainid == 16600, "Deploy: wrong chain (expected 0G Galileo 16600)");
+            // 0G Galileo testnet only. Override with ALLOW_CHAIN=1 elsewhere.
+            // Docs say 16600 but the live testnet currently returns 16602.
+            require(block.chainid == 16602, "Deploy: wrong chain (expected 0G Galileo 16602)");
         }
         uint256 pk = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(pk);

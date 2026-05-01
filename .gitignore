@@ -16,3 +16,4 @@ private*.pem
 # probe scratch
 probes/*/.work/
 probes/*/.work-last.log
+.demo-work/

@@ -3,3 +3,4 @@ out/
 broadcast/
 .env
 lib/
+# deployments/ is intentionally tracked — small JSON, useful in repo

@@ -1,0 +1,11 @@
+{
+  "chainId": 16602,
+  "rpcUrl": "https://evmrpc-testnet.0g.ai",
+  "explorer": "https://chainscan-galileo.0g.ai",
+  "AgentdirINFT": {
+    "address": "0x3061d8567ce510dcaf079dc59f7313be094261b0",
+    "deployer": "0xb9c58185d09D0aCf3b237cD45C67345E32e628BA",
+    "deployTx": "0x8fe26c9b05b5cd51f45fda01bf6f7a00884036f3c08c25404ca3e142f09c5e76",
+    "block": 30855328
+  }
+}
