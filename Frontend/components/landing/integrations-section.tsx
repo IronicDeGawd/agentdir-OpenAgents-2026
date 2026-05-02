@@ -3,18 +3,18 @@
 import { useEffect, useState, useRef } from "react";
 
 const integrations = [
-  { name: "GitHub", category: "Version Control" },
-  { name: "Slack", category: "Communication" },
-  { name: "Stripe", category: "Payments" },
-  { name: "PostgreSQL", category: "Database" },
-  { name: "Redis", category: "Cache" },
-  { name: "AWS", category: "Cloud" },
-  { name: "MongoDB", category: "Database" },
-  { name: "Vercel", category: "Hosting" },
-  { name: "Figma", category: "Design" },
-  { name: "Linear", category: "Project Management" },
-  { name: "Notion", category: "Documentation" },
-  { name: "OpenAI", category: "AI/ML" },
+  { name: "ENS", category: "Identity & discovery" },
+  { name: "0G Chain", category: "iNFT (ERC-7857)" },
+  { name: "0G Storage", category: "Reputation chain" },
+  { name: "0G Compute", category: "TeeML inference" },
+  { name: "KeeperHub", category: "USDC settlement" },
+  { name: "Gensyn AXL", category: "Agent transport" },
+  { name: "A2A v0.2.5", category: "AgentCard spec" },
+  { name: "ERC-7857", category: "iNFT standard" },
+  { name: "ed25519", category: "Signing primitive" },
+  { name: "viem", category: "EVM reads" },
+  { name: "ethers v6", category: "EVM writes" },
+  { name: "Foundry", category: "Contract toolchain" },
 ];
 
 export function IntegrationsSection() {
@@ -44,16 +44,16 @@ export function IntegrationsSection() {
         >
           <span className="inline-flex items-center gap-3 text-sm font-mono text-muted-foreground mb-6">
             <span className="w-8 h-px bg-foreground/30" />
-            Integrations
+            Stack
             <span className="w-8 h-px bg-foreground/30" />
           </span>
           <h2 className="text-4xl lg:text-6xl font-display tracking-tight mb-6">
-            Works with everything
+            Standards you
             <br />
-            you already use.
+            can verify.
           </h2>
           <p className="text-xl text-muted-foreground">
-            200+ pre-built integrations. Connect your entire stack in minutes.
+            Public chains, public specs, audited primitives. Every layer is replaceable.
           </p>
         </div>
 

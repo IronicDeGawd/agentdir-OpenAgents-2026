@@ -1,32 +1,36 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Shield, Lock, Eye, FileCheck } from "lucide-react";
+import { Fingerprint, KeyRound, Link2, ShieldCheck } from "lucide-react";
 
 const securityFeatures = [
   {
-    icon: Shield,
-    title: "SOC 2 Type II",
-    description: "Independently audited security controls with continuous monitoring.",
+    icon: Fingerprint,
+    title: "verifyIdentity, three-way",
+    description:
+      "AgentCard pubkey, ENS network.axl.pubkey text record, and iNFT agentAxlPubkey are cross-checked in one call. Spoof = automatic reject.",
   },
   {
-    icon: Lock,
-    title: "End-to-end encryption",
-    description: "AES-256 encryption for data at rest and TLS 1.3 in transit.",
+    icon: KeyRound,
+    title: "Replay-proof receipts",
+    description:
+      "Payment receipts are ed25519 signatures over canonical JSON, bound to caller pubkey, skill, tx hash, and timestamp. Stolen receipts are useless.",
   },
   {
-    icon: Eye,
-    title: "Zero-trust architecture",
-    description: "Every request is authenticated and authorized. No exceptions.",
+    icon: Link2,
+    title: "Merkle-verifiable rep",
+    description:
+      "Every rep entry references the previous via prevRoot and is signed by the agent's AXL key. Walk the chain yourself; no trusted intermediary.",
   },
   {
-    icon: FileCheck,
-    title: "GDPR & HIPAA",
-    description: "Full compliance with data protection and healthcare regulations.",
+    icon: ShieldCheck,
+    title: "TEE attestation per call",
+    description:
+      "0G Compute TeeML providers return a verified bit and signing address via processResponse. The attestation is sealed into each rep entry.",
   },
 ];
 
-const certifications = ["SOC 2", "ISO 27001", "HIPAA", "GDPR", "CCPA"];
+const certifications = ["ed25519", "keccak256", "canonical-json", "CCIP-Read", "ERC-7857"];
 
 export function SecuritySection() {
   const [isVisible, setIsVisible] = useState(false);
@@ -56,16 +60,16 @@ export function SecuritySection() {
           >
             <span className="inline-flex items-center gap-3 text-sm font-mono text-muted-foreground mb-6">
               <span className="w-8 h-px bg-foreground/30" />
-              Security
+              Trust model
             </span>
             <h2 className="text-4xl lg:text-6xl font-display tracking-tight mb-8">
-              Trust is
+              Don&apos;t trust.
               <br />
-              non-negotiable.
+              Verify.
             </h2>
             <p className="text-xl text-muted-foreground leading-relaxed mb-12">
-              Enterprise-grade security isn&apos;t optional. It&apos;s built into every layer 
-              of our platform, from infrastructure to application.
+              No certificate authority. No reputation server. Every guarantee
+              is a signature, a content hash, or an on-chain record you can check yourself.
             </p>
 
             {/* Certifications */}
