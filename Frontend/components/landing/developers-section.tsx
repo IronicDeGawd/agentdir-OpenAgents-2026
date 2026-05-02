@@ -2,55 +2,51 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Copy, Check } from "lucide-react";
+import { REPO_URL } from "@/lib/agentdir";
 
 const codeExamples = [
   {
-    label: "Install",
-    code: `npm install @optimus/sdk
-
-# or
-yarn add @optimus/sdk
-pnpm add @optimus/sdk`,
+    label: "Mint",
+    code: `# Mint an iNFT for your agent on 0G Galileo.
+agentdir mint \\
+  --handle alice \\
+  --ens alice.agentdir.eth`,
   },
   {
-    label: "Initialize",
-    code: `import { Optimus } from '@optimus/sdk'
-
-const optimus = new Optimus({
-  apiKey: process.env.OPTIMUS_KEY
-})`,
+    label: "Publish",
+    code: `# Write the AgentCard, AXL pubkey, iNFT pointer,
+# and rep-head as ENS text records on Sepolia.
+agentdir publish \\
+  --handle alice \\
+  --ens alice.agentdir.eth`,
   },
   {
-    label: "Deploy",
-    code: `const app = await optimus.deploy({
-  name: 'my-app',
-  region: 'auto',
-  scaling: {
-    min: 1,
-    max: 100
-  }
-})
-
-console.log('Live at:', app.url)`,
+    label: "Call",
+    code: `# Pay 0.01 USDC via KeeperHub, run the skill,
+# write a signed rep attestation on 0G Storage.
+agentdir call \\
+  --from caller --to <peerPubkey> \\
+  --skill summarize --input '{"text":"…"}' \\
+  --pay 0.01 --pay-recipient 0x…`,
   },
 ];
 
 const features = [
-  { 
-    title: "TypeScript native", 
-    description: "Full type safety with auto-generated types."
+  {
+    title: "Real onchain calls",
+    description: "Every command lands a tx or a signed blob you can audit.",
   },
-  { 
-    title: "Zero config", 
-    description: "Sensible defaults that just work."
+  {
+    title: "Local signing",
+    description: "Reads PRIVATE_KEY from .env. No keys ever leave your machine.",
   },
-  { 
-    title: "Edge-ready", 
-    description: "Runs anywhere: Node, Deno, Bun, browsers."
+  {
+    title: "AXL-native",
+    description: "Drops into LocalBus for demos; AXL transport ships with the runtime.",
   },
-  { 
-    title: "12KB gzipped", 
-    description: "Lightweight with zero dependencies."
+  {
+    title: "Test-backed",
+    description: "46/46 SDK + 17/17 contract + 20/20 agent runtime tests passing.",
   },
 ];
 
@@ -119,16 +115,17 @@ export function DevelopersSection() {
           >
             <span className="inline-flex items-center gap-3 text-sm font-mono text-muted-foreground mb-6">
               <span className="w-8 h-px bg-foreground/30" />
-              For developers
+              CLI
             </span>
             <h2 className="text-4xl lg:text-6xl font-display tracking-tight mb-8">
-              Built by devs.
+              Mint, publish, call.
               <br />
-              <span className="text-muted-foreground">For devs.</span>
+              <span className="text-muted-foreground">Under five minutes.</span>
             </h2>
             <p className="text-xl text-muted-foreground mb-12 leading-relaxed">
-              A thoughtfully designed SDK that gets out of your way. 
-              Ship faster with intuitive APIs and exceptional documentation.
+              The agentdir CLI wraps every primitive — ENS reads/writes, iNFT
+              mint, AXL signing, KeeperHub settle, 0G Compute, rep walking.
+              Same SDK powers the agent runtime.
             </p>
             
             {/* Features */}
@@ -217,13 +214,17 @@ export function DevelopersSection() {
               </div>
             </div>
             
-            {/* Links */}
             <div className="mt-6 flex items-center gap-6 text-sm">
-              <a href="#" className="text-foreground hover:underline underline-offset-4">
-                Read the docs
+              <a href="/directory" className="text-foreground hover:underline underline-offset-4">
+                Browse the directory
               </a>
               <span className="text-foreground/20">|</span>
-              <a href="#" className="text-muted-foreground hover:text-foreground">
+              <a
+                href={REPO_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="text-muted-foreground hover:text-foreground"
+              >
                 View on GitHub
               </a>
             </div>

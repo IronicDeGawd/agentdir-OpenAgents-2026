@@ -2,37 +2,37 @@
 
 import { ArrowUpRight } from "lucide-react";
 import { AnimatedWave } from "./animated-wave";
+import { REPO_URL } from "@/lib/agentdir";
 
 const footerLinks = {
-  Product: [
-    { name: "Features", href: "#features" },
-    { name: "How it works", href: "#how-it-works" },
-    { name: "Pricing", href: "#pricing" },
-    { name: "Integrations", href: "#integrations" },
+  Protocol: [
+    { name: "What agents get", href: "/#features" },
+    { name: "Roundtrip", href: "/#how-it-works" },
+    { name: "Live artifacts", href: "/#features" },
+    { name: "Trust model", href: "/#security" },
   ],
-  Developers: [
-    { name: "Documentation", href: "#developers" },
-    { name: "API Reference", href: "#" },
-    { name: "SDK", href: "#developers" },
-    { name: "Status", href: "#" },
+  Directory: [
+    { name: "Browse agents", href: "/directory" },
+    { name: "alice.agentdir.eth", href: "/agents/alice.agentdir.eth" },
+    { name: "bob.agentdir.eth", href: "/agents/bob.agentdir.eth" },
+    { name: "vasu.agentdir.eth", href: "/agents/vasu.agentdir.eth" },
   ],
-  Company: [
-    { name: "About", href: "#" },
-    { name: "Blog", href: "#" },
-    { name: "Careers", href: "#", badge: "Hiring" },
-    { name: "Contact", href: "#" },
+  Tracks: [
+    { name: "0G — iNFT + Storage + Compute", href: "/#features" },
+    { name: "KeeperHub — Direct Execute", href: "/#how-it-works" },
+    { name: "ENS — AI Agent + Creative", href: "/#features" },
+    { name: "Gensyn AXL", href: "/#integrations" },
   ],
-  Legal: [
-    { name: "Privacy", href: "#" },
-    { name: "Terms", href: "#" },
-    { name: "Security", href: "#security" },
+  Repo: [
+    { name: "GitHub", href: REPO_URL },
+    { name: "CLI reference", href: "/#developers" },
+    { name: "Stack", href: "/#integrations" },
   ],
 };
 
 const socialLinks = [
-  { name: "Twitter", href: "#" },
-  { name: "GitHub", href: "#" },
-  { name: "LinkedIn", href: "#" },
+  { name: "GitHub", href: REPO_URL },
+  { name: "ENS app", href: "https://app.ens.domains/agentdir.eth" },
 ];
 
 export function FooterSection() {
@@ -49,13 +49,14 @@ export function FooterSection() {
           <div className="grid grid-cols-2 md:grid-cols-6 gap-12 lg:gap-8">
             {/* Brand Column */}
             <div className="col-span-2">
-              <a href="#" className="inline-flex items-center gap-2 mb-6">
-                <span className="text-2xl font-display">Optimus</span>
-                <span className="text-xs text-muted-foreground font-mono">TM</span>
+              <a href="/" className="inline-flex items-center gap-2 mb-6">
+                <span className="text-2xl font-display">agentdir</span>
+                <span className="text-xs text-muted-foreground font-mono">.eth</span>
               </a>
 
               <p className="text-muted-foreground leading-relaxed mb-8 max-w-xs">
-                The platform for teams who ship. Build, deploy, and scale with unprecedented velocity.
+                Yellow pages for autonomous agents. ENS names, iNFT ownership,
+                signed reputation, USDC-paid skills, TEE-verified inference.
               </p>
 
               {/* Social Links */}
@@ -102,13 +103,13 @@ export function FooterSection() {
         {/* Bottom Bar */}
         <div className="py-8 border-t border-foreground/10 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-sm text-muted-foreground">
-            2025 Optimus. All rights reserved.
+            agentdir — built for ETHGlobal Open Agents 2026. MIT licensed.
           </p>
 
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
             <span className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-green-500" />
-              All systems operational
+              Sepolia + 0G Galileo · live
             </span>
           </div>
         </div>
