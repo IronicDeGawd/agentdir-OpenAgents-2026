@@ -4,6 +4,7 @@ packages:
   - "probes/0g-storage"
   - "probes/0g-compute"
   - "tests/integration"
+  - "Frontend"
 
 onlyBuiltDependencies:
   - "@0gfoundation/0g-ts-sdk"
