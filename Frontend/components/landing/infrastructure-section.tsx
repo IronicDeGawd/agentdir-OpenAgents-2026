@@ -1,19 +1,45 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { ArrowUpRight } from "lucide-react";
+import { AGENTDIR } from "@/lib/agentdir";
 
-const locations = [
-  { city: "San Francisco", region: "US West", latency: "12ms" },
-  { city: "New York", region: "US East", latency: "18ms" },
-  { city: "London", region: "Europe", latency: "24ms" },
-  { city: "Tokyo", region: "Asia Pacific", latency: "32ms" },
-  { city: "Sydney", region: "Oceania", latency: "45ms" },
-  { city: "Sao Paulo", region: "South America", latency: "38ms" },
+const artifacts = [
+  {
+    label: "ENS parent",
+    value: AGENTDIR.ensParent,
+    chain: AGENTDIR.ensNetwork,
+    href: `https://app.ens.domains/${AGENTDIR.ensParent}`,
+  },
+  {
+    label: "iNFT (ERC-7857)",
+    value: `${AGENTDIR.inft.address.slice(0, 10)}…${AGENTDIR.inft.address.slice(-4)}`,
+    chain: `${AGENTDIR.inft.chain} (${AGENTDIR.inft.chainId})`,
+    href: `https://chainscan-galileo.0g.ai/address/${AGENTDIR.inft.address}`,
+  },
+  {
+    label: "0G Compute provider",
+    value: `${AGENTDIR.compute.provider.slice(0, 10)}…${AGENTDIR.compute.provider.slice(-4)}`,
+    chain: `${AGENTDIR.compute.flavor} · ${AGENTDIR.compute.model}`,
+    href: `https://chainscan-galileo.0g.ai/address/${AGENTDIR.compute.provider}`,
+  },
+  {
+    label: "KeeperHub wallet",
+    value: `${AGENTDIR.payments.wallet.slice(0, 10)}…${AGENTDIR.payments.wallet.slice(-4)}`,
+    chain: `Sepolia · Turnkey-managed`,
+    href: `https://sepolia.etherscan.io/address/${AGENTDIR.payments.wallet}`,
+  },
+  {
+    label: "Sample paid call",
+    value: `${AGENTDIR.payments.sampleAmount}`,
+    chain: "Sepolia · USDC",
+    href: AGENTDIR.payments.sampleTx,
+  },
 ];
 
 export function InfrastructureSection() {
   const [isVisible, setIsVisible] = useState(false);
-  const [activeLocation, setActiveLocation] = useState(0);
+  const [activeRow, setActiveRow] = useState(0);
   const sectionRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -30,8 +56,8 @@ export function InfrastructureSection() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setActiveLocation((prev) => (prev + 1) % locations.length);
-    }, 2000);
+      setActiveRow((prev) => (prev + 1) % artifacts.length);
+    }, 2400);
     return () => clearInterval(interval);
   }, []);
 
@@ -39,7 +65,6 @@ export function InfrastructureSection() {
     <section ref={sectionRef} className="relative py-24 lg:py-32 overflow-hidden">
       <div className="max-w-[1400px] mx-auto px-6 lg:px-12">
         <div className="grid lg:grid-cols-2 gap-16 lg:gap-24 items-center">
-          {/* Left: Content */}
           <div
             className={`transition-all duration-700 ${
               isVisible ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-8"
@@ -47,73 +72,76 @@ export function InfrastructureSection() {
           >
             <span className="inline-flex items-center gap-3 text-sm font-mono text-muted-foreground mb-6">
               <span className="w-8 h-px bg-foreground/30" />
-              Infrastructure
+              Live artifacts
             </span>
             <h2 className="text-4xl lg:text-6xl font-display tracking-tight mb-8">
-              Global by
+              Nothing simulated.
               <br />
-              default.
+              All onchain.
             </h2>
             <p className="text-xl text-muted-foreground leading-relaxed mb-12">
-              Deploy once, run everywhere. Our edge network spans 17 data centers 
-              across 6 continents, delivering sub-50ms latency to 99% of the world.
+              Every claim on this page links to a verifiable on-chain object —
+              an ENS record, an ERC-7857 token, a TEE provider, a settled USDC
+              transfer. Click any row to open it in a block explorer.
             </p>
 
-            {/* Stats */}
             <div className="grid grid-cols-3 gap-8">
               <div>
-                <div className="text-4xl lg:text-5xl font-display mb-2">17</div>
-                <div className="text-sm text-muted-foreground">Data centers</div>
+                <div className="text-4xl lg:text-5xl font-display mb-2">{AGENTDIR.agents.length}</div>
+                <div className="text-sm text-muted-foreground">Agents on Sepolia</div>
               </div>
               <div>
-                <div className="text-4xl lg:text-5xl font-display mb-2">99.99%</div>
-                <div className="text-sm text-muted-foreground">Uptime SLA</div>
+                <div className="text-4xl lg:text-5xl font-display mb-2">17/17</div>
+                <div className="text-sm text-muted-foreground">iNFT contract tests</div>
               </div>
               <div>
-                <div className="text-4xl lg:text-5xl font-display mb-2">&lt;50ms</div>
-                <div className="text-sm text-muted-foreground">Global latency</div>
+                <div className="text-4xl lg:text-5xl font-display mb-2">~60s</div>
+                <div className="text-sm text-muted-foreground">End-to-end roundtrip</div>
               </div>
             </div>
           </div>
 
-          {/* Right: Location list */}
           <div
             className={`transition-all duration-700 delay-200 ${
               isVisible ? "opacity-100 translate-x-0" : "opacity-0 translate-x-8"
             }`}
           >
             <div className="border border-foreground/10">
-              {/* Header */}
               <div className="px-6 py-4 border-b border-foreground/10 flex items-center justify-between">
-                <span className="text-sm font-mono text-muted-foreground">Edge Network</span>
+                <span className="text-sm font-mono text-muted-foreground">Deployment</span>
                 <span className="flex items-center gap-2 text-xs font-mono text-green-600">
                   <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                  All operational
+                  Verifiable
                 </span>
               </div>
 
-              {/* Locations */}
               <div>
-                {locations.map((location, index) => (
-                  <div
-                    key={location.city}
-                    className={`px-6 py-5 border-b border-foreground/5 last:border-b-0 flex items-center justify-between transition-all duration-300 ${
-                      activeLocation === index ? "bg-foreground/[0.02]" : ""
+                {artifacts.map((row, index) => (
+                  <a
+                    key={row.label}
+                    href={row.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={`px-6 py-5 border-b border-foreground/5 last:border-b-0 flex items-center justify-between transition-all duration-300 group hover:bg-foreground/[0.03] ${
+                      activeRow === index ? "bg-foreground/[0.02]" : ""
                     }`}
                   >
                     <div className="flex items-center gap-4">
-                      <span 
+                      <span
                         className={`w-2 h-2 rounded-full transition-colors duration-300 ${
-                          activeLocation === index ? "bg-foreground" : "bg-foreground/20"
+                          activeRow === index ? "bg-foreground" : "bg-foreground/20"
                         }`}
                       />
                       <div>
-                        <div className="font-medium">{location.city}</div>
-                        <div className="text-sm text-muted-foreground">{location.region}</div>
+                        <div className="font-medium">{row.label}</div>
+                        <div className="text-sm text-muted-foreground">{row.chain}</div>
                       </div>
                     </div>
-                    <span className="font-mono text-sm text-muted-foreground">{location.latency}</span>
-                  </div>
+                    <span className="font-mono text-sm text-muted-foreground inline-flex items-center gap-1 group-hover:text-foreground transition-colors">
+                      {row.value}
+                      <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-60 transition-opacity" />
+                    </span>
+                  </a>
                 ))}
               </div>
             </div>
