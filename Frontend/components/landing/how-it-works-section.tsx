@@ -5,38 +5,45 @@ import { useEffect, useRef, useState } from "react";
 const steps = [
   {
     number: "I",
-    title: "Connect your tools",
-    description: "Integrate with your existing stack in minutes. We support 200+ data sources out of the box.",
-    code: `import { optimus } from '@optimus/core'
+    title: "Resolve and verify",
+    description:
+      "Look up an agent by ENS subname. The Universal Resolver returns the AgentCard, AXL pubkey, and iNFT pointer. verifyIdentity cross-checks all three in one call — spoofs are auto-rejected.",
+    code: `import { EnsResolver } from '@agentdir/sdk'
 
-optimus.connect({
-  source: 'your-database',
-  sync: true
-})`,
+const ens = new EnsResolver({ network: 'sepolia' })
+const bundle = await ens.getRecordBundle('alice.agentdir.eth')
+
+await ens.verifyIdentity('alice.agentdir.eth', bundle.axlPub)
+// throws if AgentCard / ENS / iNFT pubkeys disagree`,
   },
   {
     number: "II",
-    title: "Build your workflow",
-    description: "Design powerful automations with our visual builder or write code directly.",
-    code: `optimus.workflow('process', {
-  trigger: 'event',
-  actions: [
-    'validate',
-    'transform', 
-    'deliver'
-  ]
-})`,
+    title: "Pay per skill",
+    description:
+      "KeeperHub Direct Execute settles real USDC on Sepolia from a Turnkey-managed wallet. The caller signs a canonical-JSON receipt with their AXL key; the agent re-checks shape and signature before running anything.",
+    code: `import { KhDirectExecuteAdapter, signReceipt } from '@agentdir/sdk'
+
+const kh = new KhDirectExecuteAdapter({ apiKey })
+const tx = await kh.settle({
+  amount: '0.01', token: 'USDC',
+  network: 'sepolia', recipient: agent.payTo,
+})
+
+const receipt = signReceipt({ ...tx, callerPubkey, skill }, signer)`,
   },
   {
     number: "III",
-    title: "Ship to production",
-    description: "Deploy globally with zero configuration. Your app goes live in under 30 seconds.",
-    code: `optimus.deploy({
-  target: 'production',
-  regions: 'auto'
-})
+    title: "Run in a TEE, attest the result",
+    description:
+      "0G Compute's TeeML provider returns a verified bit and signing address via processResponse. The result, the receipt, and the TEE attestation get sealed into a signed rep entry on 0G Storage; the new head is published as an ENS text record.",
+    code: `const out = await broker.inference.chat(provider, prompt)
+const tee = await broker.inference.processResponse(provider, out.chatID)
+// tee = { provider, chatID, signingAddress, verified: true }
 
-// Deployed to 12 regions`,
+await rep.append({
+  skill, ok: true, payment: receipt, teeAttestation: tee,
+}, signer)
+// new head pinned at network.agentdir.rep-head`,
   },
 ];
 
@@ -88,16 +95,16 @@ export function HowItWorksSection() {
         <div className="mb-16 lg:mb-24">
           <span className="inline-flex items-center gap-3 text-sm font-mono text-background/50 mb-6">
             <span className="w-8 h-px bg-background/30" />
-            Process
+            The roundtrip
           </span>
           <h2
             className={`text-4xl lg:text-6xl font-display tracking-tight transition-all duration-700 ${
               isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
             }`}
           >
-            Three steps.
+            Discover. Pay. Run.
             <br />
-            <span className="text-background/50">Infinite possibilities.</span>
+            <span className="text-background/50">Attest. ~60 seconds.</span>
           </h2>
         </div>
 
@@ -151,7 +158,7 @@ export function HowItWorksSection() {
                   <div className="w-3 h-3 rounded-full bg-background/20" />
                   <div className="w-3 h-3 rounded-full bg-background/20" />
                 </div>
-                <span className="text-xs font-mono text-background/40">workflow.ts</span>
+                <span className="text-xs font-mono text-background/40">roundtrip.ts</span>
               </div>
 
               {/* Code content */}
