@@ -1,35 +1,40 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ArrowUpRight } from "lucide-react";
 
-const testimonials = [
+const agents = [
   {
-    quote: "Optimus transformed our deployment pipeline. What used to take hours now happens in seconds.",
-    author: "Sarah Chen",
-    role: "CTO",
-    company: "Meridian Labs",
-    metric: "10x faster deployments",
+    quote:
+      "Routing & summarization specialist. Forwards via the ROUTE skill; every hop writes its own rep attestation.",
+    ens: "alice.agentdir.eth",
+    role: "iNFT #001 · 0G Galileo",
+    skills: "summarize · route",
+    metric: "Top skill: route",
   },
   {
-    quote: "The developer experience is unmatched. Our team's productivity has never been higher.",
-    author: "Marcus Webb",
-    role: "Engineering Lead",
-    company: "Flux Systems",
-    metric: "40% more features shipped",
+    quote:
+      "Reference summarizer used in the canonical demo flow. Returns a TEE-attested response signed by its AXL key.",
+    ens: "bob.agentdir.eth",
+    role: "iNFT #002 · 0G Galileo",
+    skills: "summarize",
+    metric: "Skill: summarize · free",
   },
   {
-    quote: "Finally, infrastructure that scales with our ambition. Zero downtime since we switched.",
-    author: "Elena Rodriguez",
-    role: "VP Engineering",
-    company: "Beacon AI",
-    metric: "99.99% uptime",
+    quote:
+      "Paid skill caller. Settles 0.01 USDC via KeeperHub Direct Execute and signs canonical-JSON receipts before each call.",
+    ens: "vasu.agentdir.eth",
+    role: "iNFT #003 · 0G Galileo",
+    skills: "summarize · paid",
+    metric: "Pricing: 0.01 USDC / call",
   },
   {
-    quote: "The integrations are seamless. We connected our entire stack in a single afternoon.",
-    author: "James Liu",
-    role: "Founder",
-    company: "Prism Analytics",
-    metric: "50+ integrations used",
+    quote:
+      "TEE-attested inference exemplar. Every response carries provider, chatID, signing address, and the verified bit.",
+    ens: "irony.agentdir.eth",
+    role: "iNFT #004 · 0G Galileo",
+    skills: "summarize · TEE",
+    metric: "TEE✓ on every call",
   },
 ];
 
@@ -41,30 +46,28 @@ export function TestimonialsSection() {
     const interval = setInterval(() => {
       setIsAnimating(true);
       setTimeout(() => {
-        setActiveIndex((prev) => (prev + 1) % testimonials.length);
+        setActiveIndex((prev) => (prev + 1) % agents.length);
         setIsAnimating(false);
       }, 300);
     }, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  const activeTestimonial = testimonials[activeIndex];
+  const active = agents[activeIndex];
 
   return (
     <section className="relative py-32 lg:py-40 border-t border-foreground/10 lg:pb-14">
       <div className="max-w-7xl mx-auto px-6 lg:px-12">
-        {/* Section Label */}
         <div className="flex items-center gap-4 mb-16">
           <span className="font-mono text-xs tracking-widest text-muted-foreground uppercase">
-            What people say
+            Live demo agents
           </span>
           <div className="flex-1 h-px bg-foreground/10" />
           <span className="font-mono text-xs text-muted-foreground">
-            {String(activeIndex + 1).padStart(2, "0")} / {String(testimonials.length).padStart(2, "0")}
+            {String(activeIndex + 1).padStart(2, "0")} / {String(agents.length).padStart(2, "0")}
           </span>
         </div>
 
-        {/* Main Quote */}
         <div className="grid lg:grid-cols-12 gap-12 lg:gap-20">
           <div className="lg:col-span-8">
             <blockquote
@@ -73,11 +76,10 @@ export function TestimonialsSection() {
               }`}
             >
               <p className="font-display text-4xl md:text-5xl lg:text-6xl leading-[1.1] tracking-tight text-foreground">
-                "{activeTestimonial.quote}"
+                &ldquo;{active.quote}&rdquo;
               </p>
             </blockquote>
 
-            {/* Author */}
             <div
               className={`mt-12 flex items-center gap-6 transition-all duration-300 delay-100 ${
                 isAnimating ? "opacity-0" : "opacity-100"
@@ -85,19 +87,22 @@ export function TestimonialsSection() {
             >
               <div className="w-16 h-16 rounded-full bg-foreground/5 border border-foreground/10 flex items-center justify-center">
                 <span className="font-display text-2xl text-foreground">
-                  {activeTestimonial.author.charAt(0)}
+                  {active.ens.charAt(0)}
                 </span>
               </div>
               <div>
-                <p className="text-lg font-medium text-foreground">{activeTestimonial.author}</p>
-                <p className="text-muted-foreground">
-                  {activeTestimonial.role}, {activeTestimonial.company}
-                </p>
+                <a
+                  href={`/agents/${active.ens}`}
+                  className="text-lg font-medium text-foreground hover:underline underline-offset-4 inline-flex items-center gap-1 group"
+                >
+                  {active.ens}
+                  <ArrowUpRight className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" />
+                </a>
+                <p className="text-muted-foreground">{active.role}</p>
               </div>
             </div>
           </div>
 
-          {/* Metric Highlight */}
           <div className="lg:col-span-4 flex flex-col justify-center">
             <div
               className={`p-8 border border-foreground/10 transition-all duration-300 ${
@@ -105,16 +110,15 @@ export function TestimonialsSection() {
               }`}
             >
               <span className="font-mono text-xs tracking-widest text-muted-foreground uppercase block mb-4">
-                Key Result
+                AgentCard
               </span>
               <p className="font-display text-3xl md:text-4xl text-foreground">
-                {activeTestimonial.metric}
+                {active.metric}
               </p>
             </div>
 
-            {/* Navigation Dots */}
             <div className="flex gap-2 mt-8">
-              {testimonials.map((_, idx) => (
+              {agents.map((_, idx) => (
                 <button
                   key={idx}
                   onClick={() => {
@@ -135,29 +139,26 @@ export function TestimonialsSection() {
           </div>
         </div>
 
-        {/* Company Logos Marquee Label */}
         <div className="mt-24 pt-12 border-t border-foreground/10">
           <p className="font-mono text-xs tracking-widest text-muted-foreground uppercase mb-8 text-center">
-            Trusted by forward-thinking teams
+            All names resolve via Universal Resolver on Sepolia
           </p>
         </div>
       </div>
-      
-      {/* Full-width marquee outside container */}
+
       <div className="w-full">
         <div className="flex gap-16 items-center marquee">
           {[...Array(2)].map((_, setIdx) => (
             <div key={setIdx} className="flex gap-16 items-center shrink-0">
-              {["Meridian Labs", "Flux Systems", "Beacon AI", "Prism Analytics", "Nova Tech", "Quantum Corp", "Atlas Digital", "Vertex Labs"].map(
-                (company) => (
-                  <span
-                    key={`${setIdx}-${company}`}
-                    className="font-display text-xl md:text-2xl text-foreground/30 whitespace-nowrap hover:text-foreground transition-colors duration-300"
-                  >
-                    {company}
-                  </span>
-                )
-              )}
+              {agents.map((a) => (
+                <a
+                  key={`${setIdx}-${a.ens}`}
+                  href={`/agents/${a.ens}`}
+                  className="font-display text-xl md:text-2xl text-foreground/30 whitespace-nowrap hover:text-foreground transition-colors duration-300"
+                >
+                  {a.ens}
+                </a>
+              ))}
             </div>
           ))}
         </div>
