@@ -63,6 +63,11 @@ export async function ensureIndexes(): Promise<void> {
     db.collection("rate_limits").createIndex({ windowEndsAt: 1 }, { expireAfterSeconds: 0 }),
     db.collection("mint_log").createIndex({ createdAt: -1 }),
     db.collection("mint_log").createIndex({ ownerAddress: 1, createdAt: -1 }),
+    db.collection("prompt_skills").createIndex({ handle: 1, status: 1 }),
+    db.collection("prompt_skills").createIndex(
+      { handle: 1, skillId: 1, status: 1 },
+      { unique: true, partialFilterExpression: { status: "active" } },
+    ),
   ]);
   indexesEnsured = true;
 }

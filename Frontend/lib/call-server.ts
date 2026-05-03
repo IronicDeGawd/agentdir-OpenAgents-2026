@@ -17,9 +17,11 @@ import {
   SkillRegistry,
   SUMMARIZE,
   SENTIMENT,
+  makePromptSkill,
 } from "@agentdir/agent";
 import { getEnsResolver, getStorage } from "./sdk-server";
 import { loadIdentity, markBooted } from "./identity-store";
+import { listPromptSkills } from "./prompt-skills";
 import { parseAgentCard } from "@agentdir/sdk/agent-card";
 
 ed.etc.sha512Async = (...m) => Promise.resolve(sha512(ed.etc.concatBytes(...m)));
@@ -104,6 +106,32 @@ async function bootCallee(ens: string, useTee: boolean): Promise<CalleeRuntime> 
   const rep = new RepChain(storage);
   const skills = new SkillRegistry().add(SUMMARIZE).add(SENTIMENT);
 
+  // Load owner-published prompt skills from Mongo and register them.
+  // Failure here is non-fatal — we'd rather serve built-ins than 500
+  // the whole agent when one custom skill row is malformed.
+  try {
+    const customs = await listPromptSkills(handle);
+    for (const c of customs) {
+      try {
+        skills.add(
+          makePromptSkill({
+            id: c.skillId,
+            name: c.name,
+            description: c.description,
+            tags: c.tags,
+            systemPrompt: c.prompt,
+            maxTokens: c.maxTokens,
+            pricing: c.pricing ?? undefined,
+          }),
+        );
+      } catch (e) {
+        console.error(`[bootCallee] custom skill ${c.skillId} failed to register`, e);
+      }
+    }
+  } catch (e) {
+    console.error("[bootCallee] listPromptSkills failed", e);
+  }
+
   const agent = new Agent({
     identity,
     axl: bus as any,
@@ -126,6 +154,19 @@ async function bootCallee(ens: string, useTee: boolean): Promise<CalleeRuntime> 
   };
   runtimes.set(key, rt);
   return rt;
+}
+
+// Stops both TEE and non-TEE variants for an ENS so the next /api/call
+// re-boots with fresh skill registry. Called after /api/skills mutates
+// prompt_skills.
+export function evictRuntime(ens: string): void {
+  for (const key of [ens, `${ens}:tee`]) {
+    const rt = runtimes.get(key);
+    if (rt) {
+      rt.agent.stop?.();
+      runtimes.delete(key);
+    }
+  }
 }
 
 async function makeCaller() {

@@ -177,6 +177,81 @@ SENTIMENT.streamHandler = async function* (input: any, ctx) {
   return { label };
 };
 
+// ── Prompt-template skill factory ───────────────────────────────────
+//
+// Builders publish a skill by giving us a system prompt + a few knobs.
+// We turn that into a RegisteredSkill with both handler and stream
+// handler so /call works the same way as for built-in skills.
+//
+// Input is fixed-shape `{ text: string }`, output is `{ text: string }`.
+// Custom JSON schemas were considered out of scope — user-supplied
+// schemas open a DoS surface (deeply-nested validation) and the demo
+// covers itself with a single text-in/text-out shape.
+
+export type PromptSkillInput = {
+  id: string;
+  name: string;
+  description: string;
+  tags: string[];
+  systemPrompt: string;
+  maxTokens: number;
+  inputMaxLength?: number;
+  pricing?: Skill["pricing"];
+};
+
+export function makePromptSkill(input: PromptSkillInput): RegisteredSkill {
+  const inputMax = input.inputMaxLength ?? 5_000;
+  const def: Skill = {
+    id: input.id,
+    name: input.name,
+    description: input.description,
+    tags: input.tags,
+    inputSchema: {
+      type: "object",
+      required: ["text"],
+      properties: { text: { type: "string", maxLength: inputMax } },
+    },
+    outputSchema: {
+      type: "object",
+      properties: { text: { type: "string" } },
+    },
+    ...(input.pricing ? { pricing: input.pricing } : {}),
+  };
+  return {
+    def,
+    handler: async (rawInput: any, ctx) => {
+      const { text } = rawInput as { text: string };
+      if (typeof text !== "string" || text.length === 0) throw new Error("empty text");
+      const { text: out } = await ctx.compute.chat(
+        [
+          { role: "system", content: input.systemPrompt },
+          { role: "user", content: text },
+        ],
+        { maxTokens: input.maxTokens },
+      );
+      return { text: out.trim() };
+    },
+    streamHandler: async function* (rawInput: any, ctx) {
+      const { text } = rawInput as { text: string };
+      if (typeof text !== "string" || text.length === 0) throw new Error("empty text");
+      let acc = "";
+      const stream = (ctx.compute as any).stream(
+        [
+          { role: "system", content: input.systemPrompt },
+          { role: "user", content: text },
+        ],
+        { maxTokens: input.maxTokens },
+      );
+      for await (const delta of stream) {
+        if (typeof delta !== "string" || !delta) continue;
+        acc += delta;
+        yield delta;
+      }
+      return { text: acc.trim() };
+    },
+  };
+}
+
 // ── Swarm: route skill ──────────────────────────────────────────────
 //
 // `route` is a meta-skill. It takes a tag + payload + hopBudget,

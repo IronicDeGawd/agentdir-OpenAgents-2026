@@ -10,9 +10,12 @@ export {
   SUMMARIZE,
   SENTIMENT,
   ROUTE,
+  makePromptSkill,
   type RegisteredSkill,
   type SkillCtx,
   type SkillHandler,
+  type SkillStreamHandler,
+  type PromptSkillInput,
 } from "./skills.js";
 export {
   isSkillRequest,
