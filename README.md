@@ -195,11 +195,11 @@ Three 0G primitives are core load-bearing infrastructure, not checkboxes. Every 
 - **0G Compute (TeeML)**: Streaming inference from qwen-2.5-7b-instruct via directcompute. Every response produces a TEE attestation (`provider`, `chatID`, `verified`); embedded into rep entry so caller can prove inference was sealed.
 
 **Code references:**
-- ERC-7857 iNFT minting + state rotation: [`packages/contracts/src/AgentdirINFT.sol:62`](packages/contracts/src/AgentdirINFT.sol#L62) (emit `AgentStateUpdated`), [`packages/contracts/src/AgentdirINFT.sol:81-85`](packages/contracts/src/AgentdirINFT.sol#L81-L85) (`setAgentStateRoot` owner rotation).
-- Memory history + sig-verify: [`packages/sdk/src/inft.ts:11-14`](packages/sdk/src/inft.ts#L11-L14) (InftWriter), [`packages/sdk/src/inft.ts:83`](packages/sdk/src/inft.ts#L83) (stateHistory walker).
-- Reputation append-only chain: [`packages/sdk/src/rep.ts:49-71`](packages/sdk/src/rep.ts#L49-L71) (append with lock), [`packages/sdk/src/rep.ts:117-135`](packages/sdk/src/rep.ts#L117-L135) (scoreFor ranking).
-- TEE attestation capture: [`packages/sdk/src/compute-direct.ts:194-202`](packages/sdk/src/compute-direct.ts#L194-L202) (processResponse after chat), [`packages/sdk/src/compute-direct.ts:252-278`](packages/sdk/src/compute-direct.ts#L252-L278) (stream variant captures ZG-Res-Key header).
-- Live demo: Backend at [`Frontend/lib/call-server.ts:251-262`](Frontend/lib/call-server.ts#L251-L262) threads TEE attestation into result; frontend displays at [`Frontend/app/call/[ens]/call-panel.tsx:362-375`](Frontend/app/call/[ens]/call-panel.tsx#L362-L375).
+- ERC-7857 iNFT minting + state rotation: [`packages/contracts/src/AgentdirINFT.sol:62`](https://github.com/IronicDeGawd/agentdir-OpenAgents-2026/blob/main/packages/contracts/src/AgentdirINFT.sol#L62) (emit `AgentStateUpdated`), [`packages/contracts/src/AgentdirINFT.sol:81-85`](https://github.com/IronicDeGawd/agentdir-OpenAgents-2026/blob/main/packages/contracts/src/AgentdirINFT.sol#L81-L85) (`setAgentStateRoot` owner rotation).
+- Memory history + sig-verify: [`packages/sdk/src/inft.ts:11-14`](https://github.com/IronicDeGawd/agentdir-OpenAgents-2026/blob/main/packages/sdk/src/inft.ts#L11-L14) (InftWriter), [`packages/sdk/src/inft.ts:83`](https://github.com/IronicDeGawd/agentdir-OpenAgents-2026/blob/main/packages/sdk/src/inft.ts#L83) (stateHistory walker).
+- Reputation append-only chain: [`packages/sdk/src/rep.ts:49-71`](https://github.com/IronicDeGawd/agentdir-OpenAgents-2026/blob/main/packages/sdk/src/rep.ts#L49-L71) (append with lock), [`packages/sdk/src/rep.ts:117-135`](https://github.com/IronicDeGawd/agentdir-OpenAgents-2026/blob/main/packages/sdk/src/rep.ts#L117-L135) (scoreFor ranking).
+- TEE attestation capture: [`packages/sdk/src/compute-direct.ts:194-202`](https://github.com/IronicDeGawd/agentdir-OpenAgents-2026/blob/main/packages/sdk/src/compute-direct.ts#L194-L202) (processResponse after chat), [`packages/sdk/src/compute-direct.ts:252-278`](https://github.com/IronicDeGawd/agentdir-OpenAgents-2026/blob/main/packages/sdk/src/compute-direct.ts#L252-L278) (stream variant captures ZG-Res-Key header).
+- Live demo: Backend at [`Frontend/lib/call-server.ts:251-262`](https://github.com/IronicDeGawd/agentdir-OpenAgents-2026/blob/main/Frontend/lib/call-server.ts#L251-L262) threads TEE attestation into result; frontend displays at [`Frontend/app/call/[ens]/call-panel.tsx:362-375`](https://github.com/IronicDeGawd/agentdir-OpenAgents-2026/blob/main/Frontend/app/call/[ens]/call-panel.tsx#L362-L375).
 
 **Ease of use (1-10):** 8/10  
 Storage + Compute SDKs are well-designed for TypeScript. ESM bundle issue on compute-ts-sdk required a workaround (`webpackIgnore: true` + createRequire) to get CJS subpath loaded at runtime, but documented and solved. iNFT integration was straightforward; state root rotation events are clean.
@@ -219,10 +219,10 @@ Agent skill calls are x402-style paid invocations. Caller settles real Sepolia U
 - Payment fails are signed errors, not silent drops. Enables both charging and free skills on the same agent.
 
 **Code references:**
-- Payment settlement + receipt sig: [`packages/sdk/src/payments.ts:159-246`](packages/sdk/src/payments.ts#L159-L246) (KhDirectExecuteAdapter post + poll + sign).
-- Receipt validation: [`packages/sdk/src/payments.ts:58-138`](packages/sdk/src/payments.ts#L58-L138) (signReceipt + checkReceiptShape canonical JSON).
-- Callee-side verify: [`packages/agent/src/agent.ts:334-361`](packages/agent/src/agent.ts#L334-L361) (checkPayment re-validates sig vs callerPubkey + pricing match).
-- CLI usage: [`packages/cli/src/main.ts:19-26`](packages/cli/src/main.ts#L19-L26) (agentdir call --pay flag)
+- Payment settlement + receipt sig: [`packages/sdk/src/payments.ts:159-246`](https://github.com/IronicDeGawd/agentdir-OpenAgents-2026/blob/main/packages/sdk/src/payments.ts#L159-L246) (KhDirectExecuteAdapter post + poll + sign).
+- Receipt validation: [`packages/sdk/src/payments.ts:58-138`](https://github.com/IronicDeGawd/agentdir-OpenAgents-2026/blob/main/packages/sdk/src/payments.ts#L58-L138) (signReceipt + checkReceiptShape canonical JSON).
+- Callee-side verify: [`packages/agent/src/agent.ts:334-361`](https://github.com/IronicDeGawd/agentdir-OpenAgents-2026/blob/main/packages/agent/src/agent.ts#L334-L361) (checkPayment re-validates sig vs callerPubkey + pricing match).
+- CLI usage: [`packages/cli/src/main.ts:19-26`](https://github.com/IronicDeGawd/agentdir-OpenAgents-2026/blob/main/packages/cli/src/main.ts#L19-L26) (agentdir call --pay flag)
 - Live on prod: Sepolia tx [`0x53405d5928af91e227ed574f5cf3e904a2f54f751853bc5dbc91acfb1842a933`](https://sepolia.etherscan.io/tx/0x53405d5928af91e227ed574f5cf3e904a2f54f751853bc5dbc91acfb1842a933) — 0.01 USDC settled 2026-05-02.
 
 **Ease of use (1-10):** 9/10  
@@ -244,10 +244,10 @@ ENS is the identity + discovery backbone. Every agent is an ENS subname under `a
 - **Rep head anchor**: Every agent's latest reputation rootHash is published as `network.agentdir.rep-head` text record on ENS. Reputation chain is verifiable without polling Storage — just resolve the ENS name.
 
 **Code references:**
-- Record bundle fetch + identity verify: [`packages/sdk/src/ens.ts:54-78`](packages/sdk/src/ens.ts#L54-L78) (getRecordBundle + verifyIdentity cross-check).
-- Record publishing (5 text records): [`packages/sdk/src/ens-writer.ts:83-101`](packages/sdk/src/ens-writer.ts#L83-L101) (publishBundle writes org.a2a.agent-card, org.erc7857.tokenId, network.axl.pubkey, network.agentdir.rep-head).
-- Directory discovery: [`packages/sdk/src/directory.ts:66-111`](packages/sdk/src/directory.ts#L66-L111) (query + scoreFor ranking).
-- Frontend resolver: [`Frontend/lib/sdk-server.ts:18-32`](Frontend/lib/sdk-server.ts#L18-L32) (viem Universal Resolver client).
+- Record bundle fetch + identity verify: [`packages/sdk/src/ens.ts:54-78`](https://github.com/IronicDeGawd/agentdir-OpenAgents-2026/blob/main/packages/sdk/src/ens.ts#L54-L78) (getRecordBundle + verifyIdentity cross-check).
+- Record publishing (5 text records): [`packages/sdk/src/ens-writer.ts:83-101`](https://github.com/IronicDeGawd/agentdir-OpenAgents-2026/blob/main/packages/sdk/src/ens-writer.ts#L83-L101) (publishBundle writes org.a2a.agent-card, org.erc7857.tokenId, network.axl.pubkey, network.agentdir.rep-head).
+- Directory discovery: [`packages/sdk/src/directory.ts:66-111`](https://github.com/IronicDeGawd/agentdir-OpenAgents-2026/blob/main/packages/sdk/src/directory.ts#L66-L111) (query + scoreFor ranking).
+- Frontend resolver: [`Frontend/lib/sdk-server.ts:18-32`](https://github.com/IronicDeGawd/agentdir-OpenAgents-2026/blob/main/Frontend/lib/sdk-server.ts#L18-L32) (viem Universal Resolver client).
 - Live agents: Sepolia `agentdir.eth` subnames (alice/bob/vasu/irony) resolve via Universal Resolver https://resolver.ens.domains/.
 
 **Ease of use (1-10):** 7/10  
