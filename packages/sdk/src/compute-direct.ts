@@ -18,16 +18,7 @@
 //      before the first request to that provider.
 //   4. broker.inference.transferFund(provider, amount) — sub-account.
 
-import { createRequire } from "node:module";
-import * as nodePath from "node:path";
 import type { Wallet, JsonRpcSigner } from "ethers";
-
-// Top-level createRequire avoids dynamic `await import("node:module")` which
-// some bundlers (Next webpack) inline-mangle, breaking the .createRequire
-// reference at runtime. Using import.meta.url at top level lets the bundler
-// preserve it correctly when this file is bundled OR leave it untouched when
-// the file is loaded as plain Node ESM.
-const __require = createRequire(import.meta.url);
 
 export type DirectComputeChatOpts = {
   maxTokens?: number;
@@ -92,12 +83,19 @@ export class DirectCompute {
     // The ESM bundle (`@0gfoundation/0g-compute-ts-sdk`) ships with a broken
     // re-export ("does not provide an export named 'C'"). The CJS bundle
     // is correct, but the package's exports map blocks subpath access.
-    // Resolve a known shipped file via the main entry, walk up to the
-    // package root, then dive into lib.commonjs.
-    const mainEntry = __require.resolve("@0gfoundation/0g-compute-ts-sdk");
+    //
+    // We use a runtime indirection (`Function('return require')()`) so that
+    // bundlers cannot statically see the require call. They leave it as
+    // plain JS; at runtime it resolves to Node's real require. Without this
+    // hack webpack rewrites `require("node:module")` and friends, breaking
+    // both `createRequire` and `node:path`.
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    const nodeRequire = Function("return require")() as NodeJS.Require;
+    const nodePath = nodeRequire("node:path") as typeof import("node:path");
+    const mainEntry = nodeRequire.resolve("@0gfoundation/0g-compute-ts-sdk");
     const pkgRoot = nodePath.resolve(nodePath.dirname(mainEntry), "..");
     const cjs = nodePath.join(pkgRoot, "lib.commonjs", "index.js");
-    const { createZGComputeNetworkBroker } = __require(cjs);
+    const { createZGComputeNetworkBroker } = nodeRequire(cjs);
     const broker = await createZGComputeNetworkBroker(opts.signer);
     const meta = await broker.inference.getServiceMetadata(opts.provider);
     return new DirectCompute(broker, opts.provider, meta.endpoint, meta.model);
