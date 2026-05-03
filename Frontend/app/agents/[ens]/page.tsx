@@ -95,8 +95,10 @@ function normalizeVerifyError(raw: string | null): string | null {
   if (raw === null) return null;
   const s = raw.toLowerCase();
   if (s.includes("no axl")) return "missing AXL pubkey";
+  if (s.includes("reverse mismatch")) return "reverse record mismatch";
   if (s.includes("mismatch") || s.includes("does not match")) return "signature mismatch";
   if (s.includes("controller")) return "missing controller";
+  if (s.includes("does not resolve")) return "name does not resolve";
   if (s.includes("rpc") || s.includes("network")) return "rpc error";
   return "verification failed";
 }
