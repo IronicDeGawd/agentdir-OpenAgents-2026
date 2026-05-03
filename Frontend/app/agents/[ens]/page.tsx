@@ -3,7 +3,7 @@ import { ArrowUpRight } from "lucide-react";
 import { Navigation } from "@/components/landing/navigation";
 import { FooterSection } from "@/components/landing/footer-section";
 import { getEnsResolver } from "@/lib/sdk-server";
-import { parseAgentCard } from "@agentdir/sdk";
+import { parseAgentCard } from "@agentdir/sdk/agent-card";
 import {
   AGENTDIR,
   ENS_APP,

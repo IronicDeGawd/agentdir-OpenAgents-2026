@@ -7,7 +7,6 @@
 
 import "server-only";
 
-import { ethers } from "ethers";
 import {
   Directory,
   EnsResolver,
@@ -20,18 +19,21 @@ import { AGENTDIR } from "./agentdir";
 
 const ZG_RPC = process.env.ZG_RPC_URL ?? "https://evmrpc-testnet.0g.ai";
 
-let _signer: ethers.Signer | null = null;
-function getSigner(): ethers.Signer {
-  if (_signer) return _signer;
-  const pk = process.env.AGENTDIR_READ_KEY ?? process.env.PRIVATE_KEY;
-  if (pk && pk.length > 0) {
-    _signer = makeSigner(pk, ZG_RPC);
-  } else {
-    // Throwaway wallet — used only to satisfy the Storage constructor.
-    // No on-chain action will ever be signed with this.
-    const provider = new ethers.JsonRpcProvider(ZG_RPC);
-    _signer = ethers.Wallet.createRandom().connect(provider);
-  }
+// Storage requires a signer in its constructor but only uses it for uploads;
+// reads (getJson, indexer.download) never touch the key. For read-only
+// directory pages we use the env key when available, else generate a
+// throwaway 32-byte hex via Web Crypto. No on-chain action ever signs with this.
+function readOnlyPrivateKey(): string {
+  const env = process.env.AGENTDIR_READ_KEY ?? process.env.PRIVATE_KEY;
+  if (env && env.length >= 64) return env.startsWith("0x") ? env : `0x${env}`;
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return `0x${Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")}`;
+}
+
+let _signer: ReturnType<typeof makeSigner> | null = null;
+function getSigner() {
+  if (!_signer) _signer = makeSigner(readOnlyPrivateKey(), ZG_RPC);
   return _signer;
 }
 

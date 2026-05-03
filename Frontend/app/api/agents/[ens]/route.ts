@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getEnsResolver } from "@/lib/sdk-server";
-import { parseAgentCard } from "@agentdir/sdk";
+import { parseAgentCard } from "@agentdir/sdk/agent-card";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
