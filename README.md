@@ -6,6 +6,17 @@
 
 **Submission.** ETHGlobal Open Agents 2026.
 
+## Try it now
+
+**Production:** [https://agentdir.ironyaditya.xyz](https://agentdir.ironyaditya.xyz)
+
+- **Browse** 4 demo agents at [/directory](https://agentdir.ironyaditya.xyz/directory) — rep-ranked, live AgentCard JSON, identity verified.
+- **Call** any agent at [/call/bob.agentdir.eth](https://agentdir.ironyaditya.xyz/call/bob.agentdir.eth). Toggle **stream** for per-chunk signed deltas. Toggle **TEE-verify** for DirectCompute attestation in the receipt.
+- **Mint** your own agent at [/mint](https://agentdir.ironyaditya.xyz/mint). Connect MetaMask, pick a handle, sign a single-use challenge, server mints the iNFT to your wallet + publishes ENS records. Server pays gas (testnet).
+- **Manage** owned agents at [/dashboard](https://agentdir.ironyaditya.xyz/dashboard) — rotate memory snapshots, view state-root history, transfer the iNFT.
+
+**Hosting.** EC2 t3.small in ap-south-1 behind Cloudflare proxy + Origin Cert. Caddy → PM2-managed Next.js → Mongo (docker, loopback only). Encrypted-at-rest agent privkeys (AES-256-GCM, env-held KEK), wallet-signed mint challenges, audit log of every mint. Full deploy runbook in `context/plan/deploy-ec2.md` (gitignored).
+
 ---
 
 ## What it is
@@ -52,12 +63,31 @@ packages/
                0G Compute (Router + Direct/TEE), RepChain, SnapshotChain,
                InftWriter, Payments (KH x402). 46/46 tests.
   agent/       Reference agent runtime — recv loop, signed responses,
-               replay defense, payment verify, snapshot rotation. 20/20 tests.
+               replay defense, payment verify, snapshot rotation,
+               streaming (skill.chunk per-chunk signatures). 25/25 tests.
   cli/         `agentdir` — whoami, mint, publish, call (with --pay),
                rep, snapshot, state-history.
+Frontend/      Next.js 16 app deployed at agentdir.ironyaditya.xyz.
+               Mongo-backed encrypted identity store, wagmi v2 mint flow,
+               SSE streaming on /call, DirectCompute TEE toggle,
+               builder /dashboard for snapshots/skills/transfer.
 probes/        per-sponsor validation harnesses (5/6 green; Uniswap deferred)
 context/       planning, research, progress (gitignored)
 ```
+
+---
+
+## Web frontend (Frontend/)
+
+Live at `https://agentdir.ironyaditya.xyz`.
+
+- `/directory` — read-side: ENS Universal Resolver pulls AgentCards, rep-ranked via `Directory.scoreFor` from the SDK.
+- `/agents/[ens]` — agent profile: skills, identity verification, rep chain head.
+- `/call/[ens]` — fire a signed `SkillRequest` against a real agent runtime hosted on the same EC2 process. Toggle `stream` and the response arrives chunk-by-chunk via SSE; each chunk is independently signed (`skill.chunk` protocol message, replay-safe, out-of-order rejected). Toggle `TEE-verify` and the runtime swaps in `DirectCompute` so the receipt carries a verified provider attestation.
+- `/mint` — connect MetaMask, pick a handle, single button runs: client ed25519 keygen → wallet signs single-use nonce → server verifies + mints iNFT to user's wallet + publishes ENS records. Privkey lands in Mongo encrypted with AES-256-GCM under a server KEK. User keeps a downloaded copy of `identity.json`.
+- `/dashboard` — owner-scoped: list agents owned by connected wallet, rotate memory snapshots (server signs blob → 0G Storage upload → user wallet calls `setAgentStateRoot` on Galileo), view state-root history (`AgentStateUpdated` events), transfer iNFT.
+
+Persistence + security model is documented in `context/plan/persistence.md` (gitignored). Threat model summary: app-layer envelope encryption keeps Mongo dumps useless without the KEK; loopback-only DB binding; wallet-signed mint challenges (single-use nonces, atomic consume); CI gate refuses commits where `axlPrivateKey` appears outside the small allowlist of modules that legitimately handle it.
 
 ---
 
