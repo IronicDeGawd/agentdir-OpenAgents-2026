@@ -1,5 +1,13 @@
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Pin tracing to the monorepo root so Next doesn't latch onto an
+  // unrelated lockfile higher up the directory tree (e.g. ~/package-lock.json).
+  outputFileTracingRoot: resolve(__dirname, ".."),
   typescript: {
     ignoreBuildErrors: true,
   },
