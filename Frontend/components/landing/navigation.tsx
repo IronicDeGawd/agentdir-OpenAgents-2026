@@ -4,12 +4,13 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
 import { REPO_URL } from "@/lib/agentdir";
+import { WalletButton } from "@/components/wallet-button";
 
 const navLinks = [
   { name: "Directory", href: "/directory" },
+  { name: "Mint", href: "/mint" },
   { name: "How it works", href: "/#how-it-works" },
   { name: "Stack", href: "/#integrations" },
-  { name: "CLI", href: "/#developers" },
 ];
 
 export function Navigation() {
@@ -74,14 +75,7 @@ export function Navigation() {
             >
               GitHub
             </a>
-            <a href="/directory">
-              <Button
-                size="sm"
-                className={`bg-foreground hover:bg-foreground/90 text-background rounded-full transition-all duration-500 ${isScrolled ? "px-4 h-8 text-xs" : "px-6"}`}
-              >
-                Browse directory
-              </Button>
-            </a>
+            <WalletButton />
           </div>
 
           {/* Mobile Menu Button */}

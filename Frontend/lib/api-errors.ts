@@ -11,6 +11,9 @@ export type ApiErrorCode =
   | "STORAGE_UNAVAILABLE"
   | "DIRECTORY_FAILED"
   | "REP_FAILED"
+  | "HANDLE_TAKEN"
+  | "MINT_FAILED"
+  | "PUBLISH_FAILED"
   | "INTERNAL";
 
 const MESSAGES: Record<ApiErrorCode, string> = {
@@ -21,6 +24,9 @@ const MESSAGES: Record<ApiErrorCode, string> = {
   STORAGE_UNAVAILABLE: "Storage unavailable",
   DIRECTORY_FAILED: "Directory query failed",
   REP_FAILED: "Reputation lookup failed",
+  HANDLE_TAKEN: "Handle is already taken",
+  MINT_FAILED: "iNFT mint failed",
+  PUBLISH_FAILED: "ENS publish failed",
   INTERNAL: "Internal error",
 };
 
@@ -47,7 +53,9 @@ export function apiError(
       ? 400
       : code === "ENS_NOT_FOUND"
         ? 404
-        : 502;
+        : code === "HANDLE_TAKEN"
+          ? 409
+          : 502;
   console.error(
     `[api:${context}] requestId=${requestId} code=${code}`,
     err instanceof Error ? err.stack ?? err.message : err,
