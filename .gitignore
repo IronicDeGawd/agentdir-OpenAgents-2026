@@ -11,7 +11,7 @@ cache/
 broadcast/
 private*.pem
 .DS_Store
-
+.playwright-mcp
 .claude/
 
 # probe scratch
@@ -19,3 +19,6 @@ probes/*/.work/
 probes/*/.work-last.log
 .demo-work/
 
+*.key
+*.pem
+*.crt

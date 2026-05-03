@@ -15,8 +15,11 @@ import { canonicalJson, type AxlClient } from "@agentdir/sdk";
 import {
   isSkillRequest,
   isSkillResponse,
+  isSkillChunk,
   type ResponseSigDomain,
+  type ChunkSigDomain,
   type SkillRequest,
+  type SkillChunk,
   type SkillResponseOk,
 } from "./protocol.js";
 
@@ -44,6 +47,144 @@ export type CallSkillArgs = {
    */
   onForeignMessage?: (m: { from: string; body: string }) => Promise<void> | void;
 };
+
+export type StreamEvent =
+  | { kind: "chunk"; seq: number; text: string }
+  | { kind: "final"; response: SkillResponseOk };
+
+export type CallSkillStreamArgs = CallSkillArgs & {
+  onChunk: (seq: number, text: string) => void | Promise<void>;
+};
+
+/**
+ * Streaming variant. Sends a `stream:true` request, accumulates signed
+ * chunks via the responder's stream handler, then awaits the terminal
+ * skill.res. Each chunk's signature is verified independently against
+ * the expected responder pubkey — a man-in-the-middle can't drop,
+ * reorder, or fabricate chunks. Out-of-order seqs throw.
+ */
+export async function callSkillStream(args: CallSkillStreamArgs): Promise<SkillResponseOk> {
+  const id = randomUUID();
+  const nonce = randomBytes(16).toString("hex");
+  const req: SkillRequest = {
+    v: 1,
+    type: "skill.req",
+    id,
+    nonce,
+    ts: Date.now(),
+    skill: args.skill,
+    input: args.input,
+    callerINFT: args.callerINFT,
+    callerPubkey: args.callerPubkey,
+    payment: args.payment,
+    stream: true,
+  };
+  await args.axl.sendJson(args.destPubkey, req);
+
+  const expectedPub = (args.expectedResponderPubkey ?? args.destPubkey).toLowerCase();
+  const maxAge = args.maxResponseAgeMs ?? 30_000;
+  const deadline = Date.now() + (args.timeoutMs ?? 90_000);
+  let nextSeq = 0;
+
+  while (Date.now() < deadline) {
+    const m = await args.axl.recvOnce();
+    if (!m) {
+      await new Promise((r) => setTimeout(r, 100));
+      continue;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(m.body);
+    } catch {
+      if (args.onForeignMessage) await args.onForeignMessage(m);
+      continue;
+    }
+    if (isSkillChunk(parsed)) {
+      const c = parsed as SkillChunk;
+      if (c.id !== id) continue;
+      if (c.signerPubkey.toLowerCase() !== expectedPub)
+        throw new Error(`chunk signer mismatch: ${c.signerPubkey}`);
+      if (c.responder.toLowerCase() !== expectedPub)
+        throw new Error("chunk responder mismatch");
+      if (c.caller.toLowerCase() !== args.callerPubkey.toLowerCase())
+        throw new Error("chunk not addressed to this caller");
+      if (c.skill !== args.skill) throw new Error("chunk skill mismatch");
+      if (c.seq !== nextSeq) throw new Error(`chunk seq out of order: got ${c.seq} expected ${nextSeq}`);
+      const skew = Math.abs(Date.now() - c.ts);
+      if (skew > maxAge) throw new Error(`stale chunk: ${skew}ms`);
+      const domain: ChunkSigDomain = {
+        v: 1,
+        id: c.id,
+        seq: c.seq,
+        text: c.text,
+        responder: c.responder,
+        caller: c.caller,
+        skill: c.skill,
+        ts: c.ts,
+      };
+      const digest = keccak256(toHex(canonicalJson(domain)));
+      const sigOk = await ed.verifyAsync(
+        Buffer.from(stripHex(c.sig), "hex"),
+        Buffer.from(stripHex(digest), "hex"),
+        Buffer.from(stripHex(expectedPub), "hex"),
+      );
+      if (!sigOk) throw new Error(`chunk ${c.seq} signature invalid`);
+      await args.onChunk(c.seq, c.text);
+      nextSeq += 1;
+      continue;
+    }
+    if (isSkillRequest(parsed)) {
+      if (args.onForeignMessage) await args.onForeignMessage(m);
+      continue;
+    }
+    if (!isSkillResponse(parsed)) {
+      if (args.onForeignMessage) await args.onForeignMessage(m);
+      continue;
+    }
+    if (parsed.id !== id) continue;
+    // Same final-response verification as non-streaming callSkill.
+    if (parsed.signerPubkey.toLowerCase() !== expectedPub)
+      throw new Error(`responder pubkey mismatch: got ${parsed.signerPubkey}`);
+    if (parsed.responder.toLowerCase() !== expectedPub)
+      throw new Error("responder field mismatch");
+    if (parsed.caller.toLowerCase() !== args.callerPubkey.toLowerCase())
+      throw new Error("response not addressed to this caller");
+    if (parsed.skill !== args.skill) throw new Error("skill mismatch in response");
+    const skew = Math.abs(Date.now() - parsed.ts);
+    if (skew > maxAge) throw new Error(`stale response: ${skew}ms`);
+    const domain: ResponseSigDomain = parsed.ok
+      ? {
+          v: 1,
+          id: parsed.id,
+          ok: true,
+          output: parsed.output,
+          responder: parsed.responder,
+          caller: parsed.caller,
+          skill: parsed.skill,
+          ts: parsed.ts,
+        }
+      : {
+          v: 1,
+          id: parsed.id,
+          ok: false,
+          error: parsed.error,
+          responder: parsed.responder,
+          caller: parsed.caller,
+          skill: parsed.skill,
+          ts: parsed.ts,
+        };
+    const digest = keccak256(toHex(canonicalJson(domain)));
+    const sigOk = await ed.verifyAsync(
+      Buffer.from(stripHex(parsed.sig), "hex"),
+      Buffer.from(stripHex(digest), "hex"),
+      Buffer.from(stripHex(expectedPub), "hex"),
+    );
+    if (!sigOk) throw new Error("response signature invalid");
+    if (!parsed.ok) throw new Error(`remote: ${parsed.error}`);
+    return parsed;
+  }
+  throw new Error("call timeout");
+}
 
 export async function callSkill(args: CallSkillArgs): Promise<SkillResponseOk> {
   const id = randomUUID();

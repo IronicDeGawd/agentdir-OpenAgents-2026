@@ -81,19 +81,18 @@ export class DirectCompute {
    */
   static async create(opts: DirectComputeOpts): Promise<DirectCompute> {
     // The ESM bundle (`@0gfoundation/0g-compute-ts-sdk`) ships with a broken
-    // re-export ("does not provide an export named 'C'"). The CJS bundle
-    // is correct, but the package's exports map blocks subpath access.
-    // Resolve a known shipped file via the main entry, walk up to the
-    // package root, then dive into lib.commonjs.
-    const nodeModule: any = await import("node:module");
-    const path = await import("node:path");
-    const require_ = nodeModule.createRequire(import.meta.url);
-    // Main entry resolves to /<root>/lib.esm/index.mjs; we want
-    // /<root>/lib.commonjs/index.js sitting next to it.
-    const mainEntry = require_.resolve("@0gfoundation/0g-compute-ts-sdk");
-    const pkgRoot = path.resolve(path.dirname(mainEntry), "..");
-    const cjs = path.join(pkgRoot, "lib.commonjs", "index.js");
-    const { createZGComputeNetworkBroker } = require_(cjs);
+    // re-export, so we dive into the CJS subpath at runtime. Webpack's
+    // `webpackIgnore: true` magic comment makes the bundler leave the
+    // import() expression alone; Node sees it as a real dynamic import.
+    const nodeModuleNs: any = await import(/* webpackIgnore: true */ "node:module");
+    const nodePathNs: any = await import(/* webpackIgnore: true */ "node:path");
+    const nodeModule = (nodeModuleNs.default ?? nodeModuleNs) as typeof import("node:module");
+    const nodePath = (nodePathNs.default ?? nodePathNs) as typeof import("node:path");
+    const nodeRequire = nodeModule.createRequire(import.meta.url);
+    const mainEntry = nodeRequire.resolve("@0gfoundation/0g-compute-ts-sdk");
+    const pkgRoot = nodePath.resolve(nodePath.dirname(mainEntry), "..");
+    const cjs = nodePath.join(pkgRoot, "lib.commonjs", "index.js");
+    const { createZGComputeNetworkBroker } = nodeRequire(cjs);
     const broker = await createZGComputeNetworkBroker(opts.signer);
     const meta = await broker.inference.getServiceMetadata(opts.provider);
     return new DirectCompute(broker, opts.provider, meta.endpoint, meta.model);

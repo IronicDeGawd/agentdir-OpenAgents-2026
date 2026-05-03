@@ -1,0 +1,170 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { ArrowRight } from "lucide-react";
+import { AnimatedSphere } from "./animated-sphere";
+
+const words = ["discover", "own", "earn", "get paid"];
+
+export function HeroSection() {
+  const [isVisible, setIsVisible] = useState(false);
+  const [wordIndex, setWordIndex] = useState(0);
+  // First render shows the word with no per-char animation so SSR + hydrate
+  // match. After mount we flip to animated cycling.
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setIsVisible(true);
+    setHasMounted(true);
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setWordIndex((prev) => (prev + 1) % words.length);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <section className="relative flex flex-col justify-center overflow-hidden">
+      {/* Animated sphere background — capped right + dimmed so it doesn't
+          eat the headline. */}
+      <div className="absolute right-[-120px] top-1/2 -translate-y-1/2 w-[480px] h-[480px] lg:w-[640px] lg:h-[640px] opacity-25 pointer-events-none">
+        <AnimatedSphere />
+      </div>
+
+      {/* Subtle grid lines */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-30">
+        {[...Array(8)].map((_, i) => (
+          <div
+            key={`h-${i}`}
+            className="absolute h-px bg-foreground/10"
+            style={{ top: `${12.5 * (i + 1)}%`, left: 0, right: 0 }}
+          />
+        ))}
+        {[...Array(12)].map((_, i) => (
+          <div
+            key={`v-${i}`}
+            className="absolute w-px bg-foreground/10"
+            style={{ left: `${8.33 * (i + 1)}%`, top: 0, bottom: 0 }}
+          />
+        ))}
+      </div>
+
+      <div className="relative z-10 max-w-[1400px] mx-auto px-6 lg:px-12 pt-28 pb-16 lg:pt-32 lg:pb-24 w-full">
+        {/* Eyebrow */}
+        <div
+          className={`mb-8 transition-all duration-700 ${
+            isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+          }`}
+        >
+          <span className="inline-flex items-center gap-3 text-sm font-mono text-muted-foreground">
+            <span className="w-8 h-px bg-foreground/30" />
+            <span className="hidden sm:inline">Yellow pages for autonomous agents</span>
+            <span className="sm:hidden">Yellow pages · agents</span>
+          </span>
+        </div>
+
+        {/* Main headline */}
+        <div className="mb-10 lg:mb-12">
+          <h1
+            className={`text-[clamp(2.5rem,9vw,8rem)] font-display leading-[0.95] tracking-tight transition-all duration-1000 ${
+              isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+            }`}
+          >
+            <span className="block">A place</span>
+            <span className="block">
+              to{" "}
+              <span className="relative inline-block">
+                {hasMounted ? (
+                  <span key={wordIndex} className="inline-flex whitespace-pre">
+                    {words[wordIndex].split("").map((char, i) => (
+                      <span
+                        key={`${wordIndex}-${i}`}
+                        className="inline-block animate-char-in"
+                        style={{ animationDelay: `${i * 50}ms` }}
+                      >
+                        {char === " " ? " " : char}
+                      </span>
+                    ))}
+                  </span>
+                ) : (
+                  <span className="inline-flex whitespace-pre">{words[0]}</span>
+                )}
+                <span className="absolute -bottom-2 left-0 right-0 h-3 bg-foreground/10" />
+              </span>
+            </span>
+          </h1>
+        </div>
+
+        {/* Description */}
+        <div className="grid lg:grid-cols-2 gap-10 lg:gap-24 items-end">
+          <p
+            className={`text-lg lg:text-xl text-muted-foreground leading-relaxed max-w-xl transition-all duration-700 delay-200 ${
+              isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+            }`}
+          >
+            ENS-named identity, ERC-7857 iNFT ownership, signed reputation on
+            0G Storage, USDC-paid skills via KeeperHub, TEE-verified inference.
+            No central directory.
+          </p>
+
+          {/* CTAs */}
+          <div
+            className={`flex flex-col sm:flex-row items-start gap-4 transition-all duration-700 delay-300 ${
+              isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+            }`}
+          >
+            <a href="/directory">
+              <Button
+                size="lg"
+                className="bg-foreground hover:bg-foreground/90 text-background px-8 h-14 text-base rounded-full group"
+              >
+                Browse directory
+                <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
+              </Button>
+            </a>
+            <a href="#how-it-works">
+              <Button
+                size="lg"
+                variant="outline"
+                className="h-14 px-8 text-base rounded-full border-foreground/20 hover:bg-foreground/5"
+              >
+                See the roundtrip
+              </Button>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats marquee — in flow, masked edges so cards don't clip mid-letter. */}
+      <div
+        className={`relative z-10 border-t border-foreground/10 pt-8 pb-10 marquee-mask transition-opacity duration-700 delay-500 ${
+          isVisible ? "opacity-100" : "opacity-0"
+        }`}
+      >
+        <div className="flex gap-16 marquee whitespace-nowrap">
+          {[...Array(2)].map((_, i) => (
+            <div key={i} className="flex gap-16 shrink-0">
+              {[
+                { value: "4", label: "agents live on Sepolia", company: "AGENTDIR.ETH" },
+                { value: "17/17", label: "iNFT contract tests", company: "ERC-7857" },
+                { value: "46/46", label: "SDK unit tests", company: "@AGENTDIR/SDK" },
+                { value: "~60s", label: "discover → pay → infer → attest", company: "ROUNDTRIP" },
+              ].map((stat) => (
+                <div key={`${stat.company}-${i}`} className="flex items-baseline gap-4">
+                  <span className="text-3xl lg:text-4xl font-display">{stat.value}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {stat.label}
+                    <span className="block font-mono text-xs mt-1">{stat.company}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}

@@ -1,0 +1,67 @@
+# System Caddy config (NOT containerized).
+# Install path:  /etc/caddy/Caddyfile
+# Reload:        sudo systemctl reload caddy
+#
+# Requires the Cloudflare DNS plugin so ACME can solve DNS-01 without
+# exposing port 80 publicly:
+#   sudo caddy add-package github.com/caddy-dns/cloudflare
+#
+# CLOUDFLARE_API_TOKEN must be in the caddy systemd service environment.
+# Put it in /etc/caddy/caddy.env and reference via the systemd unit:
+#   sudo systemctl edit caddy
+#   [Service]
+#   EnvironmentFile=/etc/caddy/caddy.env
+
+{
+	# Global ACME settings — single email, prod CA. Comment to use staging
+	# while you test cert flow.
+	email ops@agentdir.example.com
+	servers {
+		protocols h1 h2 h3
+	}
+}
+
+# Replace agentdir.example.com with the real Cloudflare-fronted hostname.
+agentdir.example.com {
+	encode gzip zstd
+
+	tls {
+		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+	}
+
+	# Block any access path to mongo from the public side, in case someone
+	# misconfigures something downstream. Defense in depth — Mongo already
+	# binds 127.0.0.1.
+	@blocked path /mongo* /admin*
+	respond @blocked 404
+
+	# Health probe (kept lightweight, no DB hits)
+	@healthz path /api/healthz
+	reverse_proxy @healthz localhost:3000
+
+	# Everything else → Next on 3000
+	reverse_proxy localhost:3000 {
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto https
+		transport http {
+			read_timeout 90s
+			write_timeout 90s
+		}
+	}
+
+	header {
+		# Modern security headers; Next.js serves the rest at app level.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+	}
+
+	log {
+		output file /var/log/caddy/agentdir.access.log {
+			roll_size 100mb
+			roll_keep 7
+		}
+	}
+}

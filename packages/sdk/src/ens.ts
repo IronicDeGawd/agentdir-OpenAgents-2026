@@ -77,9 +77,11 @@ export class EnsResolver {
    */
   async verifyIdentity(name: string, expectedAxlPubkey: string): Promise<string | null> {
     const addr = await this.getAddress(name);
-    if (!addr) return "name does not resolve";
-    const reverse = await this.getPrimaryName(addr as `0x${string}`);
-    if (reverse?.toLowerCase() !== name.toLowerCase()) return "reverse mismatch";
+    // Skip address requirement for agent profiles that only use Text Records.
+    if (addr) {
+      const reverse = await this.getPrimaryName(addr as `0x${string}`);
+      if (reverse?.toLowerCase() !== name.toLowerCase()) return "reverse mismatch";
+    }
     const pub = await this.getText(name, "network.axl.pubkey");
     if (!pub || pub.toLowerCase() !== expectedAxlPubkey.toLowerCase())
       return "axl.pubkey mismatch";

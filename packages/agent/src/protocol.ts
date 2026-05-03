@@ -23,6 +23,11 @@ export type SkillRequest = {
   callerINFT?: string;
   // Caller's AXL pubkey — bound into responder sig domain.
   callerPubkey: string;
+  // When true, responder MAY use its streamHandler (if defined) and emit
+  // intermediate skill.chunk frames before the terminal skill.res. Caller
+  // accumulates chunks, verifies each independently, and treats the
+  // final res output as the canonical answer.
+  stream?: boolean;
 };
 
 /**
@@ -74,7 +79,41 @@ export type SkillResponseErr = {
 
 export type SkillResponse = SkillResponseOk | SkillResponseErr;
 
-export type Envelope = SkillRequest | SkillResponse;
+/**
+ * Streaming intermediate chunk. Each chunk is independently signed so a
+ * man-in-the-middle can't drop, reorder, or fabricate frames. Final
+ * `skill.res` (with `streamFinal=true`) closes the stream and binds the
+ * full ordered sequence in its sig domain.
+ *
+ * seq starts at 0 and monotonically increments. text is the model
+ * delta. Signed over: {v, id, seq, text, responder, caller, skill, ts}.
+ */
+export type SkillChunk = {
+  v: 1;
+  type: "skill.chunk";
+  id: string;
+  seq: number;
+  text: string;
+  ts: number;
+  responder: string;
+  caller: string;
+  skill: string;
+  sig: string;
+  signerPubkey: string;
+};
+
+export type ChunkSigDomain = {
+  v: 1;
+  id: string;
+  seq: number;
+  text: string;
+  responder: string;
+  caller: string;
+  skill: string;
+  ts: number;
+};
+
+export type Envelope = SkillRequest | SkillResponse | SkillChunk;
 
 export function isSkillRequest(x: any): x is SkillRequest {
   return (
@@ -91,4 +130,16 @@ export function isSkillRequest(x: any): x is SkillRequest {
 
 export function isSkillResponse(x: any): x is SkillResponse {
   return x && x.v === 1 && x.type === "skill.res" && typeof x.id === "string";
+}
+
+export function isSkillChunk(x: any): x is SkillChunk {
+  return (
+    x &&
+    x.v === 1 &&
+    x.type === "skill.chunk" &&
+    typeof x.id === "string" &&
+    typeof x.seq === "number" &&
+    typeof x.text === "string" &&
+    typeof x.sig === "string"
+  );
 }
