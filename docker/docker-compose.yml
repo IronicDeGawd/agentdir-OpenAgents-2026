@@ -14,7 +14,11 @@ services:
     image: mongo:7
     container_name: agentdir-mongo
     restart: unless-stopped
-    command: ["--bind_ip", "0.0.0.0", "--auth"]
+    # Default entrypoint enables --auth automatically when MONGO_INITDB_ROOT_*
+    # are set on first boot. We bind the container's mongod to 0.0.0.0 INSIDE
+    # the container; the host port mapping below restricts external reach to
+    # 127.0.0.1 so only the host PM2 process can connect.
+    command: ["--bind_ip_all"]
     ports:
       - "127.0.0.1:27017:27017"
     volumes:
