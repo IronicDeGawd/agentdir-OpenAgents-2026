@@ -17,6 +17,7 @@ import { SUMMARIZE, SENTIMENT } from "@agentdir/agent";
 import { AGENTDIR_INFT_ADDRESS } from "@/lib/galileo";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { apiError } from "@/lib/api-errors";
+import { loadIdentity } from "@/lib/identity-store";
 
 const ENS_REGISTRY_SEPOLIA: Hex = "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e";
 const PUBLIC_RESOLVER_SEPOLIA: Hex = "0xE99638b40E4Fff0129D56f03b55b6bbC4BBE49b5";
@@ -112,6 +113,29 @@ export async function POST(req: Request) {
   }
 
   const ens = `${handle}.${PARENT}`;
+
+  // Authoritative identity is the row Mongo wrote during /api/mint.
+  // Trust it over client-supplied pubkey+tokenId — those are passed
+  // along only as a sanity check.
+  let stored;
+  try {
+    stored = await loadIdentity(handle);
+  } catch (e) {
+    const { body, status } = apiError("BAD_INPUT", "no identity for handle", "publish");
+    return NextResponse.json(body, { status });
+  }
+  if (stored.ensName !== ens) {
+    const { body: e, status } = apiError("BAD_INPUT", "ens mismatch", "publish");
+    return NextResponse.json(e, { status });
+  }
+  if (stored.axlPubkeyHex.toLowerCase() !== pub) {
+    const { body: e, status } = apiError("BAD_INPUT", "pubkey mismatch", "publish");
+    return NextResponse.json(e, { status });
+  }
+  if ((stored.inftTokenId ?? "") !== tokenId) {
+    const { body: e, status } = apiError("BAD_INPUT", "tokenId mismatch", "publish");
+    return NextResponse.json(e, { status });
+  }
 
   let txHashes: Hex[] = [];
   let recordKeys: string[];

@@ -12,12 +12,12 @@ import {
   Agent,
   LocalBusClient,
   callSkill,
-  loadOrCreate,
   SkillRegistry,
   SUMMARIZE,
   SENTIMENT,
 } from "@agentdir/agent";
 import { getEnsResolver, getStorage } from "./sdk-server";
+import { loadIdentity, markBooted } from "./identity-store";
 import { parseAgentCard } from "@agentdir/sdk/agent-card";
 
 ed.etc.sha512Async = (...m) => Promise.resolve(sha512(ed.etc.concatBytes(...m)));
@@ -29,7 +29,7 @@ type CalleeRuntime = {
   ens: string;
   agent: Agent;
   bus: LocalBusClient;
-  identity: Awaited<ReturnType<typeof loadOrCreate>>;
+  identity: Awaited<ReturnType<typeof loadIdentity>>;
   rep: RepChain;
 };
 
@@ -47,7 +47,11 @@ async function bootCallee(ens: string): Promise<CalleeRuntime> {
   if (cached) return cached;
 
   const handle = ensToHandle(ens);
-  const identity = await loadOrCreate(handle, null);
+  const identity = await loadIdentity(handle);
+  // Identity store decrypts privkey only into process memory; never written
+  // to disk, never logged. agent runtime needs both pub + priv to sign
+  // attestations.
+  void markBooted(handle).catch(() => {});
   const bus = new LocalBusClient(identity.axlPubkeyHex);
 
   if (!process.env.ZEROG_API_KEY) {

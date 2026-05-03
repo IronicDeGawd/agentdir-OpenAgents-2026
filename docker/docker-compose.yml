@@ -1,0 +1,39 @@
+# Mongo-only compose. App runs natively under PM2 alongside this on the host.
+#
+# To start:   docker compose -f docker/docker-compose.yml --env-file .env up -d
+# To stop:    docker compose -f docker/docker-compose.yml down
+#
+# Mongo binds 127.0.0.1:27017 only — no external exposure. Caddy never reaches
+# Mongo; only the PM2-managed Next process does, via localhost.
+#
+# Volume /var/lib/agentdir/mongo lives on the host root volume. Daily mongodump
+# cron (documented in README) ships encrypted ciphertext blobs only.
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: agentdir-mongo
+    restart: unless-stopped
+    command: ["--bind_ip", "0.0.0.0", "--auth"]
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - /var/lib/agentdir/mongo:/data/db
+      - ./mongo/init.js:/docker-entrypoint-initdb.d/init.js:ro
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:?set MONGO_ROOT_USER in .env}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PW:?set MONGO_ROOT_PW in .env}
+      MONGO_INITDB_DATABASE: agentdir
+      AGENTDIR_APP_USER: ${MONGO_APP_USER:?set MONGO_APP_USER in .env}
+      AGENTDIR_APP_PW: ${MONGO_APP_PW:?set MONGO_APP_PW in .env}
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"

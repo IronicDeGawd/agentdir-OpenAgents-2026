@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useAccount } from "wagmi";
+import { useAccount, useSignMessage } from "wagmi";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { WalletButton } from "@/components/wallet-button";
@@ -28,6 +28,7 @@ const HANDLE_RE = /^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$/;
 
 export function MintFlow() {
   const { address, isConnected } = useAccount();
+  const { signMessageAsync } = useSignMessage();
   const [handle, setHandle] = useState("");
   const [check, setCheck] = useState<{
     status: "idle" | "checking" | "ok" | "taken" | "invalid" | "error";
@@ -93,16 +94,39 @@ export function MintFlow() {
     }
 
     // Step 2 — mint
+    //   2a) request signed nonce from server (binds owner+ens, single-use)
+    //   2b) wagmi signMessage — prompts user
+    //   2c) POST /api/mint with signature + identity (privkey leaves browser
+    //       only over TLS; server seals with KEK before storing in Mongo).
     setSteps((s) => ({ ...s, mint: "running" }));
     let mint: MintResult;
     try {
+      const challengeRes = await fetch("/api/auth/challenge", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "mint", ownerAddress: address, ens }),
+      });
+      const challenge = (await challengeRes.json()) as {
+        message: string;
+        nonce: string;
+        error?: string;
+      };
+      if (!challengeRes.ok) throw new Error(challenge.error ?? "challenge failed");
+
+      const signature = await signMessageAsync({ message: challenge.message });
+
       const r = await fetch("/api/mint", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           handle,
-          axlPubkeyHex: id.axlPubkeyHex,
           ownerAddress: address,
+          message: challenge.message,
+          signature,
+          identity: {
+            axlPubkeyHex: id.axlPubkeyHex,
+            axlPrivateKeyHex: id.axlPrivateKeyHex,
+          },
         }),
       });
       const j = (await r.json()) as MintResult & { error?: string };
@@ -165,7 +189,7 @@ export function MintFlow() {
       setSteps((s) => ({ ...s, verify: "error" }));
       setError(`verify failed: ${(e as Error).message}`);
     }
-  }, [address, isConnected, handle, ens, check.status]);
+  }, [address, isConnected, handle, ens, check.status, signMessageAsync]);
 
   const inflight =
     steps.identity === "running" ||
