@@ -22,6 +22,7 @@ interface CallResult {
   responder?: string;
   totalMs: number;
   repHead?: string | null;
+  teeAttestation?: { provider: string; verified: boolean } | null;
 }
 
 interface Props {
@@ -41,9 +42,11 @@ export function CallPanel({ ens, card }: Props) {
 
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<CallResult | null>(null);
+  const [streamText, setStreamText] = useState<string>("");
+  const [streamTrace, setStreamTrace] = useState<TraceEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // Mode toggles. UI-only for now; backend wiring rides on the next pass.
+  // Mode toggles. stream + tee land via real backend; pay still UI-only.
   const [mode, setMode] = useState<{ stream: boolean; tee: boolean; pay: boolean }>({
     stream: false,
     tee: false,
@@ -54,12 +57,16 @@ export function CallPanel({ ens, card }: Props) {
     setSkillId(next);
     setInputJson(JSON.stringify(defaultInputFor(next), null, 2));
     setResult(null);
+    setStreamText("");
+    setStreamTrace([]);
     setError(null);
   }
 
   async function fire() {
     setError(null);
     setResult(null);
+    setStreamText("");
+    setStreamTrace([]);
     let parsed: unknown;
     try {
       parsed = JSON.parse(inputJson);
@@ -72,14 +79,63 @@ export function CallPanel({ ens, card }: Props) {
       const r = await fetch("/api/call", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ens, skill: skillId, input: parsed }),
+        body: JSON.stringify({
+          ens,
+          skill: skillId,
+          input: parsed,
+          mode: { tee: mode.tee, pay: mode.pay },
+          stream: mode.stream,
+        }),
       });
-      const j = (await r.json()) as CallResult & { error?: string; code?: string };
-      if (!r.ok && !j.trace) {
-        setError(j.error ?? "Call failed");
-      } else {
-        setResult(j);
-        if (!j.ok && j.error) setError(j.error);
+      if (!mode.stream) {
+        const j = (await r.json()) as CallResult & { error?: string; code?: string };
+        if (!r.ok && !j.trace) {
+          setError(j.error ?? "Call failed");
+        } else {
+          setResult(j);
+          if (!j.ok && j.error) setError(j.error);
+        }
+        return;
+      }
+      // SSE path — parse event/data frames, append chunks live.
+      if (!r.ok || !r.body) {
+        setError(`HTTP ${r.status}`);
+        return;
+      }
+      const reader = r.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+        let idx;
+        while ((idx = buf.indexOf("\n\n")) !== -1) {
+          const frame = buf.slice(0, idx);
+          buf = buf.slice(idx + 2);
+          let event = "message";
+          let data = "";
+          for (const line of frame.split("\n")) {
+            if (line.startsWith("event:")) event = line.slice(6).trim();
+            else if (line.startsWith("data:")) data += line.slice(5).trim();
+          }
+          if (!data) continue;
+          let payload: any;
+          try {
+            payload = JSON.parse(data);
+          } catch {
+            continue;
+          }
+          if (event === "trace") setStreamTrace((t) => [...t, payload]);
+          else if (event === "chunk") setStreamText((s) => s + payload.text);
+          else if (event === "final") {
+            setResult(payload);
+            if (!payload.ok && payload.error) setError(payload.error);
+          } else if (event === "error") {
+            setError(payload.error ?? "stream error");
+          }
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Network error");
@@ -176,9 +232,10 @@ export function CallPanel({ ens, card }: Props) {
               </CallToggle>
             </div>
             <p className="text-[11px] font-mono text-muted-foreground mt-2">
-              stream + TEE land via DirectCompute (E9). x402 settles via
-              KeeperHub on Sepolia. UI is wired; backend toggles ride on
-              the next iteration.
+              stream emits per-chunk signed deltas through the agent runtime.
+              TEE-verify swaps in DirectCompute (E9) and surfaces the provider
+              attestation. x402 pricing is in the AgentCard; settlement
+              wiring rides on the next pass.
             </p>
           </div>
 
@@ -217,15 +274,15 @@ export function CallPanel({ ens, card }: Props) {
             )}
           </div>
           <div className="px-6 py-4 font-mono text-sm space-y-2 min-h-[200px]">
-            {!result && !running && (
+            {!result && !running && streamTrace.length === 0 && (
               <div className="text-muted-foreground/60">Fire to begin.</div>
             )}
-            {running && (
+            {running && streamTrace.length === 0 && !result && (
               <div className="text-muted-foreground animate-pulse">
                 Resolving ENS, signing, dispatching…
               </div>
             )}
-            {result?.trace.map((ev, i) => (
+            {(result?.trace ?? streamTrace).map((ev, i) => (
               <div key={i} className="flex items-start gap-3">
                 <span
                   className={
@@ -249,6 +306,25 @@ export function CallPanel({ ens, card }: Props) {
             ))}
           </div>
         </div>
+
+        {streamText && (
+          <div className="border border-foreground/10">
+            <div className="px-6 py-4 border-b border-foreground/10 flex items-center justify-between">
+              <span className="text-xs font-mono text-muted-foreground uppercase tracking-widest">
+                Live stream
+              </span>
+              <span className="text-[10px] font-mono text-muted-foreground">
+                each chunk independently signed
+              </span>
+            </div>
+            <div className="px-6 py-4">
+              <pre className="font-mono text-sm whitespace-pre-wrap break-words">
+                {streamText}
+                {running && <span className="opacity-50 animate-pulse">▍</span>}
+              </pre>
+            </div>
+          </div>
+        )}
 
         {result?.ok && Array.isArray((result.output as any)?.trace) && (
           <HopTracePanel trace={(result.output as any).trace} />
@@ -282,6 +358,20 @@ export function CallPanel({ ens, card }: Props) {
             )}
             {result.repHead && (
               <Row label="rep rootHash">{shortHex(result.repHead)}</Row>
+            )}
+            {result.teeAttestation && (
+              <Row label="TEE attested">
+                <span
+                  className={
+                    result.teeAttestation.verified
+                      ? "text-emerald-500"
+                      : "text-destructive"
+                  }
+                >
+                  {result.teeAttestation.verified ? "✓" : "✗"}{" "}
+                </span>
+                provider {shortHex(result.teeAttestation.provider)}
+              </Row>
             )}
           </div>
         )}

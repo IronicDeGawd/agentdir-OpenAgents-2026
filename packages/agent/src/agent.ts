@@ -29,6 +29,8 @@ import {
   type ResponseSigDomain,
   type SkillRequest,
   type SkillResponse,
+  type SkillChunk,
+  type ChunkSigDomain,
 } from "./protocol.js";
 
 export type AgentOpts = {
@@ -248,21 +250,40 @@ export class Agent {
 
     let output: unknown;
     let ok = true;
+    const ctx = {
+      compute: this.opts.compute,
+      ...(this.opts.swarm
+        ? {
+            swarm: {
+              axl: this.opts.swarm.axl,
+              routingTable: this.opts.swarm.routingTable,
+              callerPubkey: this.opts.identity.axlPubkeyHex,
+              callerINFT: this.opts.identity.inftTokenId,
+            },
+          }
+        : {}),
+    };
+    const useStream = req.stream && typeof reg.streamHandler === "function";
     try {
-      const ctx = {
-        compute: this.opts.compute,
-        ...(this.opts.swarm
-          ? {
-              swarm: {
-                axl: this.opts.swarm.axl,
-                routingTable: this.opts.swarm.routingTable,
-                callerPubkey: this.opts.identity.axlPubkeyHex,
-                callerINFT: this.opts.identity.inftTokenId,
-              },
-            }
-          : {}),
-      };
-      output = await reg.handler(req.input, ctx);
+      if (useStream) {
+        // Streaming path: emit signed chunks per yielded text, then the
+        // generator's return value as the final output. Caller verifies
+        // each chunk independently (replay-safe across the stream) and
+        // signs the terminal res over the canonical output.
+        const gen = reg.streamHandler!(req.input, ctx);
+        let seq = 0;
+        while (true) {
+          const step = await gen.next();
+          if (step.done) {
+            output = step.value;
+            break;
+          }
+          await this.emitChunk(fromPubkey, req, seq, step.value);
+          seq += 1;
+        }
+      } else {
+        output = await reg.handler(req.input, ctx);
+      }
     } catch (e: any) {
       ok = false;
       await this.replyErr(fromPubkey, req, e?.message ?? "skill failed");
@@ -361,6 +382,42 @@ export class Agent {
   private async signResponse(d: ResponseSigDomain): Promise<string> {
     const digest = keccak256(toHex(canonicalJson(d)));
     return signDigest(this.opts.identity, digest);
+  }
+
+  private async emitChunk(
+    to: string,
+    req: SkillRequest,
+    seq: number,
+    text: string,
+  ): Promise<void> {
+    const ts = Date.now();
+    const responder = this.opts.identity.axlPubkeyHex;
+    const domain: ChunkSigDomain = {
+      v: 1,
+      id: req.id,
+      seq,
+      text,
+      responder,
+      caller: req.callerPubkey,
+      skill: req.skill,
+      ts,
+    };
+    const digest = keccak256(toHex(canonicalJson(domain)));
+    const sig = await signDigest(this.opts.identity, digest);
+    const chunk: SkillChunk = {
+      v: 1,
+      type: "skill.chunk",
+      id: req.id,
+      seq,
+      text,
+      ts,
+      responder,
+      caller: req.callerPubkey,
+      skill: req.skill,
+      sig,
+      signerPubkey: responder,
+    };
+    await this.opts.axl.sendJson(to, chunk);
   }
 
   private async replyOk(to: string, req: SkillRequest, output: unknown): Promise<void> {

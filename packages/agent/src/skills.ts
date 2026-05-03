@@ -25,9 +25,21 @@ export type SkillHandler<I = unknown, O = unknown> = (
   ctx: SkillCtx
 ) => Promise<O>;
 
+/** Streaming variant. Yields text chunks as they arrive from the model,
+ *  returns the final structured output as the generator's return value.
+ *  Agent runtime emits each yielded chunk as a signed `skill.chunk` over
+ *  AXL, then signs the return value as the terminal `skill.res`. */
+export type SkillStreamHandler<I = unknown, O = unknown> = (
+  input: I,
+  ctx: SkillCtx
+) => AsyncGenerator<string, O, void>;
+
 export type RegisteredSkill = {
   def: Skill;
   handler: SkillHandler;
+  /** When present, agent runtime prefers the stream handler if the
+   *  caller requested streaming (skill.req.stream=true). */
+  streamHandler?: SkillStreamHandler;
 };
 
 export class SkillRegistry {
@@ -78,6 +90,25 @@ export const SUMMARIZE: RegisteredSkill = {
     );
     return { summary: out.trim() };
   },
+  streamHandler: async function* (input: any, ctx) {
+    const { text } = input as { text: string };
+    if (typeof text !== "string" || text.length === 0) throw new Error("empty text");
+    let acc = "";
+    const messages = [
+      { role: "system" as const, content: "Summarize the user's text in one sentence." },
+      { role: "user" as const, content: text },
+    ];
+    // ctx.compute is Compute | DirectCompute; both expose a `stream` async
+    // iterator over delta strings. DirectCompute's stream still emits the
+    // TEE attestation onto compute.lastTeeAttestation when done.
+    const stream = (ctx.compute as any).stream(messages, { maxTokens: 120 });
+    for await (const delta of stream) {
+      if (typeof delta !== "string" || !delta) continue;
+      acc += delta;
+      yield delta;
+    }
+    return { summary: acc.trim() };
+  },
 };
 
 export const SENTIMENT: RegisteredSkill = {
@@ -117,6 +148,33 @@ export const SENTIMENT: RegisteredSkill = {
       return { label: "neutral" };
     return { label };
   },
+};
+
+// Sentiment streaming variant — same model, streamed delta-by-delta. Final
+// output is normalized to one of the three labels.
+SENTIMENT.streamHandler = async function* (input: any, ctx) {
+  const { text } = input as { text: string };
+  let acc = "";
+  const stream = (ctx.compute as any).stream(
+    [
+      {
+        role: "system" as const,
+        content:
+          'Classify the user\'s text. Reply with exactly one word: "positive", "neutral", or "negative". No punctuation.',
+      },
+      { role: "user" as const, content: text },
+    ],
+    { maxTokens: 6 },
+  );
+  for await (const delta of stream) {
+    if (typeof delta !== "string" || !delta) continue;
+    acc += delta;
+    yield delta;
+  }
+  const label = acc.trim().toLowerCase().replace(/[^a-z]/g, "");
+  if (label !== "positive" && label !== "neutral" && label !== "negative")
+    return { label: "neutral" };
+  return { label };
 };
 
 // ── Swarm: route skill ──────────────────────────────────────────────

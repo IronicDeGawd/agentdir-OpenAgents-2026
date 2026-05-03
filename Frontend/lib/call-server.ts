@@ -4,6 +4,7 @@ import * as ed from "@noble/ed25519";
 import { sha512 } from "@noble/hashes/sha512";
 import {
   Compute,
+  DirectCompute,
   RepChain,
   Storage,
   makeSigner,
@@ -12,6 +13,7 @@ import {
   Agent,
   LocalBusClient,
   callSkill,
+  callSkillStream,
   SkillRegistry,
   SUMMARIZE,
   SENTIMENT,
@@ -22,8 +24,11 @@ import { parseAgentCard } from "@agentdir/sdk/agent-card";
 
 ed.etc.sha512Async = (...m) => Promise.resolve(sha512(ed.etc.concatBytes(...m)));
 
-// One persistent runtime per callee handle. LocalBus is process-global, so
-// caller and callee share the same in-memory bus.
+const ZG_RPC = process.env.ZG_RPC_URL ?? "https://evmrpc-testnet.0g.ai";
+
+// Per-callee runtimes, keyed `<ens>` for normal mode and `<ens>:tee` for the
+// DirectCompute (TEE-attested) variant. LocalBus is process-global so the
+// caller can reach either bus the same way.
 type CalleeRuntime = {
   handle: string;
   ens: string;
@@ -31,37 +36,70 @@ type CalleeRuntime = {
   bus: LocalBusClient;
   identity: Awaited<ReturnType<typeof loadIdentity>>;
   rep: RepChain;
+  compute: Compute | DirectCompute;
+  tee: boolean;
 };
 
 const runtimes = new Map<string, CalleeRuntime>();
 
 function ensToHandle(ens: string): string {
-  // bob.agentdir.eth → bob
   const first = ens.split(".")[0];
   if (!first) throw new Error("invalid ens");
   return first;
 }
 
-async function bootCallee(ens: string): Promise<CalleeRuntime> {
-  const cached = runtimes.get(ens);
+async function buildCompute(useTee: boolean): Promise<Compute | DirectCompute> {
+  if (!process.env.ZEROG_API_KEY) {
+    throw new Error("ZEROG_API_KEY missing on server");
+  }
+  if (!useTee) {
+    return new Compute({
+      apiKey: process.env.ZEROG_API_KEY,
+      network: "testnet",
+      model: process.env.ZEROG_MODEL ?? "qwen/qwen-2.5-7b-instruct",
+    });
+  }
+  const pk = process.env.PRIVATE_KEY;
+  if (!pk) throw new Error("PRIVATE_KEY missing — needed for DirectCompute broker auth");
+  const provider = process.env.ZEROG_PROVIDER;
+  if (!provider) throw new Error("ZEROG_PROVIDER env missing for TEE mode");
+  const signer = makeSigner(pk, ZG_RPC);
+  // ethers Wallet returned; DirectCompute accepts Wallet | JsonRpcSigner.
+  return DirectCompute.create({ signer: signer as any, provider });
+}
+
+async function bootCallee(ens: string, useTee: boolean): Promise<CalleeRuntime> {
+  const key = useTee ? `${ens}:tee` : ens;
+  const cached = runtimes.get(key);
   if (cached) return cached;
 
   const handle = ensToHandle(ens);
   const identity = await loadIdentity(handle);
-  // Identity store decrypts privkey only into process memory; never written
-  // to disk, never logged. agent runtime needs both pub + priv to sign
-  // attestations.
   void markBooted(handle).catch(() => {});
-  const bus = new LocalBusClient(identity.axlPubkeyHex);
 
-  if (!process.env.ZEROG_API_KEY) {
-    throw new Error("ZEROG_API_KEY missing on server");
+  // Each TEE/non-TEE variant gets its own LocalBus pubkey so messages don't
+  // mix. We append `:tee` to the actual axlPubkey hex for the bus key only —
+  // the on-wire identity (signature, ENS record) still uses the canonical
+  // pubkey because callers send to that.
+  //
+  // Catch: LocalBus dispatches by axlPubkey. Two runtimes for the same
+  // identity would race. So instead of two buses, share one bus and
+  // re-route on a per-call basis by booting only the requested variant
+  // and tearing the other one down. Simpler approach: only one variant
+  // boots at a time per ENS; if mode flips we restart.
+  const existingNonTee = runtimes.get(ens);
+  const existingTee = runtimes.get(`${ens}:tee`);
+  if (useTee && existingNonTee) {
+    existingNonTee.agent.stop?.();
+    runtimes.delete(ens);
   }
-  const compute = new Compute({
-    apiKey: process.env.ZEROG_API_KEY,
-    network: "testnet",
-    model: process.env.ZEROG_MODEL ?? "qwen/qwen-2.5-7b-instruct",
-  });
+  if (!useTee && existingTee) {
+    existingTee.agent.stop?.();
+    runtimes.delete(`${ens}:tee`);
+  }
+
+  const bus = new LocalBusClient(identity.axlPubkeyHex);
+  const compute = await buildCompute(useTee);
   const storage = getStorage();
   const rep = new RepChain(storage);
   const skills = new SkillRegistry().add(SUMMARIZE).add(SENTIMENT);
@@ -69,21 +107,27 @@ async function bootCallee(ens: string): Promise<CalleeRuntime> {
   const agent = new Agent({
     identity,
     axl: bus as any,
-    compute,
+    compute: compute as any,
     storage,
     rep,
     skills,
   });
-  // Fire and forget — Agent.start() returns promise that resolves on stop.
   void agent.start();
 
-  const rt: CalleeRuntime = { handle, ens, agent, bus, identity, rep };
-  runtimes.set(ens, rt);
+  const rt: CalleeRuntime = {
+    handle,
+    ens,
+    agent,
+    bus,
+    identity,
+    rep,
+    compute,
+    tee: useTee,
+  };
+  runtimes.set(key, rt);
   return rt;
 }
 
-// Per-call ephemeral caller identity — one keypair per request, no on-disk
-// persistence. Caller doesn't need an iNFT for free demo calls.
 async function makeCaller() {
   const priv = ed.utils.randomPrivateKey();
   const pub = await ed.getPublicKeyAsync(priv);
@@ -110,20 +154,27 @@ export interface CallResult {
   responder?: string;
   totalMs: number;
   repHead?: string | null;
+  // TEE attestation, present when caller asked for TEE mode and the
+  // DirectCompute response carried a verifiable provider signature.
+  teeAttestation?: { provider: string; verified: boolean } | null;
 }
+
+export type CallMode = { tee?: boolean; pay?: boolean };
 
 export async function callAgentSkill(opts: {
   ens: string;
   skill: string;
   input: unknown;
+  mode?: CallMode;
 }): Promise<CallResult> {
   const trace: TraceEvent[] = [];
   const t0 = Date.now();
   const tick = (step: string, ok: boolean, detail?: unknown) =>
     trace.push({ step, ok, ms: Date.now() - t0, detail });
 
+  const useTee = !!opts.mode?.tee;
+
   try {
-    // 1. Resolve ENS + verify identity
     const resolver = getEnsResolver();
     const bundle = await resolver.getRecordBundle(opts.ens);
     const cardJson = bundle["org.a2a.agent-card"];
@@ -139,10 +190,6 @@ export async function callAgentSkill(opts: {
       skills: card.skills.map((s) => s.id),
     });
 
-    // verifyIdentity does forward+reverse address resolution + agent-card
-    // pubkey cross-check. ENS subnames under agentdir.eth don't publish a
-    // forward address record, so we surface the result but only block on
-    // pubkey-mismatch failures (the actual identity binding).
     const verifyError = await resolver.verifyIdentity(opts.ens, axlPub);
     const isHardFail = verifyError !== null && /mismatch/i.test(verifyError);
     if (isHardFail) {
@@ -151,22 +198,19 @@ export async function callAgentSkill(opts: {
     }
     tick("verify-identity", true, verifyError ?? "axl pubkey matched record");
 
-    // 2. Boot callee runtime (cached)
-    const callee = await bootCallee(opts.ens);
+    const callee = await bootCallee(opts.ens, useTee);
     if (callee.identity.axlPubkeyHex.toLowerCase() !== axlPub.toLowerCase()) {
       tick("boot-callee", false, "server identity does not match ENS");
       return finish(false, opts, trace, t0, "Server identity mismatch");
     }
-    tick("boot-callee", true, { handle: callee.handle });
+    tick("boot-callee", true, { handle: callee.handle, tee: useTee });
 
-    // 3. Caller identity
     const caller = await makeCaller();
     tick("build-request", true, {
       callerPubkey: caller.pubHex,
       skill: opts.skill,
     });
 
-    // 4. callSkill — signs, dispatches, awaits + verifies response
     const dispatchStart = Date.now();
     const res = await callSkill({
       axl: caller.bus as any,
@@ -175,14 +219,26 @@ export async function callAgentSkill(opts: {
       skill: opts.skill,
       input: opts.input,
       expectedResponderPubkey: callee.identity.axlPubkeyHex,
-      timeoutMs: 60_000,
+      timeoutMs: 90_000,
     });
     tick("dispatch + sign", true, { latencyMs: Date.now() - dispatchStart });
-    tick("compute-result", true, { source: "0G Compute" });
+    tick("compute-result", true, { source: useTee ? "0G DirectCompute (TEE)" : "0G Compute" });
     tick("verify-response-sig", true, { responder: res.responder });
 
-    // 5. Wait briefly for rep attestation upload (fire-and-forget in agent
-    // runtime, can take 30-60s on 0G; cap at 5s so UI stays snappy).
+    let teeAttestation: CallResult["teeAttestation"] = null;
+    if (useTee && callee.compute instanceof DirectCompute) {
+      const att = (callee.compute as DirectCompute).lastTeeAttestation;
+      if (att) {
+        teeAttestation = { provider: att.provider, verified: att.verified };
+        tick("tee-attest", att.verified, {
+          provider: att.provider,
+          verified: att.verified,
+        });
+      } else {
+        tick("tee-attest", false, "no attestation captured");
+      }
+    }
+
     const repBefore = callee.rep.head;
     const repDeadline = Date.now() + 5_000;
     while (Date.now() < repDeadline && callee.rep.head === repBefore) {
@@ -205,12 +261,224 @@ export async function callAgentSkill(opts: {
       responder: res.responder,
       totalMs: Date.now() - t0,
       repHead,
+      teeAttestation,
     };
   } catch (err) {
     console.error("[call-server] failed", err);
     const msg = err instanceof Error ? err.message : "call failed";
     tick("error", false, msg);
     return finish(false, opts, trace, t0, msg);
+  }
+}
+
+// ── Streaming variant ─────────────────────────────────────────────────
+//
+// Yields events: `{kind:"trace", trace}` per resolve/verify/boot step,
+// `{kind:"chunk", seq, text}` per signed chunk delta, and a terminal
+// `{kind:"final", result: CallResult}` once the responder's skill.res
+// arrives. /api/call route adapts these to SSE frames.
+
+export type StreamEventOut =
+  | { kind: "trace"; event: TraceEvent }
+  | { kind: "chunk"; seq: number; text: string }
+  | { kind: "final"; result: CallResult };
+
+export async function* callAgentSkillStream(opts: {
+  ens: string;
+  skill: string;
+  input: unknown;
+  mode?: CallMode;
+}): AsyncGenerator<StreamEventOut> {
+  const trace: TraceEvent[] = [];
+  const t0 = Date.now();
+  const tick = (step: string, ok: boolean, detail?: unknown) => {
+    const ev = { step, ok, ms: Date.now() - t0, detail };
+    trace.push(ev);
+    return ev;
+  };
+
+  const useTee = !!opts.mode?.tee;
+
+  try {
+    const resolver = getEnsResolver();
+    const bundle = await resolver.getRecordBundle(opts.ens);
+    const cardJson = bundle["org.a2a.agent-card"];
+    const axlPub = bundle["network.axl.pubkey"] ?? null;
+    if (!cardJson || !axlPub) {
+      yield { kind: "trace", event: tick("resolve-ens", false, "missing records") };
+      yield { kind: "final", result: finish(false, opts, trace, t0, "Agent not published") };
+      return;
+    }
+    const card = parseAgentCard(cardJson);
+    yield {
+      kind: "trace",
+      event: tick("resolve-ens", true, {
+        axlPubkey: axlPub,
+        iNFT: bundle["org.erc7857.tokenId"] ?? null,
+        skills: card.skills.map((s) => s.id),
+      }),
+    };
+
+    const verifyError = await resolver.verifyIdentity(opts.ens, axlPub);
+    const isHardFail = verifyError !== null && /mismatch/i.test(verifyError);
+    if (isHardFail) {
+      yield { kind: "trace", event: tick("verify-identity", false, verifyError) };
+      yield {
+        kind: "final",
+        result: finish(false, opts, trace, t0, "Identity verification failed"),
+      };
+      return;
+    }
+    yield {
+      kind: "trace",
+      event: tick("verify-identity", true, verifyError ?? "axl pubkey matched record"),
+    };
+
+    const callee = await bootCallee(opts.ens, useTee);
+    if (callee.identity.axlPubkeyHex.toLowerCase() !== axlPub.toLowerCase()) {
+      yield { kind: "trace", event: tick("boot-callee", false, "server identity mismatch") };
+      yield {
+        kind: "final",
+        result: finish(false, opts, trace, t0, "Server identity mismatch"),
+      };
+      return;
+    }
+    yield {
+      kind: "trace",
+      event: tick("boot-callee", true, { handle: callee.handle, tee: useTee }),
+    };
+
+    const caller = await makeCaller();
+    yield {
+      kind: "trace",
+      event: tick("build-request", true, {
+        callerPubkey: caller.pubHex,
+        skill: opts.skill,
+      }),
+    };
+
+    const dispatchStart = Date.now();
+    // Buffered chunk channel — agent runtime emits asynchronously while we
+    // await callSkillStream's terminal response. We push to a queue and
+    // drain it in the for-await below.
+    const chunkBuffer: Array<{ seq: number; text: string }> = [];
+    let resolveNext: ((v: void) => void) | null = null;
+    const wake = () => {
+      if (resolveNext) {
+        const r = resolveNext;
+        resolveNext = null;
+        r();
+      }
+    };
+
+    const callPromise = callSkillStream({
+      axl: caller.bus as any,
+      destPubkey: callee.identity.axlPubkeyHex,
+      callerPubkey: caller.pubHex,
+      skill: opts.skill,
+      input: opts.input,
+      expectedResponderPubkey: callee.identity.axlPubkeyHex,
+      timeoutMs: 90_000,
+      onChunk: (seq, text) => {
+        chunkBuffer.push({ seq, text });
+        wake();
+      },
+    });
+
+    let done = false;
+    let finalRes: Awaited<typeof callPromise> | null = null;
+    let finalErr: unknown = null;
+
+    callPromise.then(
+      (r) => {
+        finalRes = r;
+        done = true;
+        wake();
+      },
+      (e) => {
+        finalErr = e;
+        done = true;
+        wake();
+      },
+    );
+
+    while (!done || chunkBuffer.length > 0) {
+      while (chunkBuffer.length > 0) {
+        const c = chunkBuffer.shift()!;
+        yield { kind: "chunk", seq: c.seq, text: c.text };
+      }
+      if (done) break;
+      await new Promise<void>((r) => {
+        resolveNext = r;
+      });
+    }
+
+    if (finalErr) throw finalErr;
+    const res = finalRes!;
+    yield {
+      kind: "trace",
+      event: tick("dispatch + sign", true, { latencyMs: Date.now() - dispatchStart }),
+    };
+    yield {
+      kind: "trace",
+      event: tick("compute-result", true, {
+        source: useTee ? "0G DirectCompute (TEE)" : "0G Compute",
+      }),
+    };
+    yield {
+      kind: "trace",
+      event: tick("verify-response-sig", true, { responder: res.responder }),
+    };
+
+    let teeAttestation: CallResult["teeAttestation"] = null;
+    if (useTee && callee.compute instanceof DirectCompute) {
+      const att = (callee.compute as DirectCompute).lastTeeAttestation;
+      if (att) {
+        teeAttestation = { provider: att.provider, verified: att.verified };
+        yield {
+          kind: "trace",
+          event: tick("tee-attest", att.verified, {
+            provider: att.provider,
+            verified: att.verified,
+          }),
+        };
+      }
+    }
+
+    const repBefore = callee.rep.head;
+    const repDeadline = Date.now() + 5_000;
+    while (Date.now() < repDeadline && callee.rep.head === repBefore) {
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    const repHead = callee.rep.head ?? null;
+    yield {
+      kind: "trace",
+      event:
+        repHead && repHead !== repBefore
+          ? tick("rep-attestation", true, { rootHash: repHead })
+          : tick("rep-attestation", false, "still uploading (continues in background)"),
+    };
+
+    yield {
+      kind: "final",
+      result: {
+        ok: true,
+        ens: opts.ens,
+        skill: opts.skill,
+        output: res.output,
+        trace,
+        responseSig: res.sig,
+        responder: res.responder,
+        totalMs: Date.now() - t0,
+        repHead,
+        teeAttestation,
+      },
+    };
+  } catch (err) {
+    console.error("[call-server:stream] failed", err);
+    const msg = err instanceof Error ? err.message : "call failed";
+    yield { kind: "trace", event: tick("error", false, msg) };
+    yield { kind: "final", result: finish(false, opts, trace, t0, msg) };
   }
 }
 
