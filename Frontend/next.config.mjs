@@ -14,6 +14,15 @@ const nextConfig = {
   // The SDK ships TypeScript source with ESM `.js` import suffixes (NodeNext
   // convention). The bundler needs to resolve `./types.js` to `./types.ts`.
   transpilePackages: ["@agentdir/sdk", "@agentdir/agent"],
+  // The 0G compute SDK uses createRequire to dodge a broken ESM bundle.
+  // Webpack's bundling breaks createRequire, so mark these packages as
+  // external on the server runtime — they'll be required at runtime
+  // instead of bundled.
+  serverExternalPackages: [
+    "@0gfoundation/0g-compute-ts-sdk",
+    "@0gfoundation/0g-ts-sdk",
+    "ethers",
+  ],
   webpack: (config) => {
     config.resolve.extensionAlias = {
       ".js": [".js", ".ts", ".tsx"],
