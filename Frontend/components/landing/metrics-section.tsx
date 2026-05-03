@@ -72,12 +72,16 @@ const metrics = [
 ];
 
 export function MetricsSection() {
-  const [time, setTime] = useState(new Date());
+  // SSR renders empty so server + client first paint match. After mount the
+  // clock starts ticking client-side only.
+  const [time, setTime] = useState<string>("");
   const [isVisible, setIsVisible] = useState(false);
   const sectionRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    const interval = setInterval(() => setTime(new Date()), 1000);
+    const tick = () => setTime(new Date().toLocaleTimeString());
+    tick();
+    const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -119,7 +123,7 @@ export function MetricsSection() {
               Live
             </span>
             <span className="text-foreground/30">|</span>
-            <span>{time.toLocaleTimeString()}</span>
+            <span suppressHydrationWarning>{time || "--:--:-- --"}</span>
           </div>
         </div>
         

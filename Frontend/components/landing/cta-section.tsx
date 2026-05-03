@@ -95,9 +95,9 @@ export function CtaSection() {
             </div>
           </div>
 
-          {/* Decorative corner */}
-          <div className="absolute top-0 right-0 w-32 h-32 border-b border-l border-foreground/10" />
-          <div className="absolute bottom-0 left-0 w-32 h-32 border-t border-r border-foreground/10" />
+          {/* Decorative corner brackets */}
+          <div className="absolute top-0 right-0 w-12 h-12 border-b border-l border-foreground/20 pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-12 h-12 border-t border-r border-foreground/20 pointer-events-none" />
         </div>
       </div>
     </section>

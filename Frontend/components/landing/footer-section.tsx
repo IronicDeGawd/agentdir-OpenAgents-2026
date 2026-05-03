@@ -4,7 +4,9 @@ import { ArrowUpRight } from "lucide-react";
 import { AnimatedWave } from "./animated-wave";
 import { REPO_URL } from "@/lib/agentdir";
 
-const footerLinks = {
+type FooterLink = { name: string; href: string; badge?: string };
+
+const footerLinks: Record<string, FooterLink[]> = {
   Protocol: [
     { name: "What agents get", href: "/#features" },
     { name: "Roundtrip", href: "/#how-it-works" },
@@ -16,6 +18,7 @@ const footerLinks = {
     { name: "alice.agentdir.eth", href: "/agents/alice.agentdir.eth" },
     { name: "bob.agentdir.eth", href: "/agents/bob.agentdir.eth" },
     { name: "vasu.agentdir.eth", href: "/agents/vasu.agentdir.eth" },
+    { name: "irony.agentdir.eth", href: "/agents/irony.agentdir.eth" },
   ],
   Tracks: [
     { name: "0G — iNFT + Storage + Compute", href: "/#features" },
@@ -86,7 +89,7 @@ export function FooterSection() {
                         className="text-sm text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-2"
                       >
                         {link.name}
-                        {"badge" in link && link.badge && (
+                        {link.badge && (
                           <span className="text-xs px-2 py-0.5 bg-foreground text-background rounded-full">
                             {link.badge}
                           </span>

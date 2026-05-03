@@ -56,7 +56,7 @@ export function TestimonialsSection() {
   const active = agents[activeIndex];
 
   return (
-    <section className="relative py-32 lg:py-40 border-t border-foreground/10 lg:pb-14">
+    <section className="relative py-24 lg:py-32 border-t border-foreground/10 scroll-mt-24">
       <div className="max-w-7xl mx-auto px-6 lg:px-12">
         <div className="flex items-center gap-4 mb-16">
           <span className="font-mono text-xs tracking-widest text-muted-foreground uppercase">
@@ -75,7 +75,7 @@ export function TestimonialsSection() {
                 isAnimating ? "opacity-0 translate-y-4" : "opacity-100 translate-y-0"
               }`}
             >
-              <p className="font-display text-4xl md:text-5xl lg:text-6xl leading-[1.1] tracking-tight text-foreground">
+              <p className="font-display text-3xl md:text-4xl lg:text-5xl leading-[1.1] tracking-tight text-foreground">
                 &ldquo;{active.quote}&rdquo;
               </p>
             </blockquote>
@@ -128,7 +128,8 @@ export function TestimonialsSection() {
                       setIsAnimating(false);
                     }, 300);
                   }}
-                  className={`h-2 transition-all duration-300 ${
+                  aria-label={`Show testimonial ${idx + 1}`}
+                  className={`h-2 rounded-full transition-all duration-300 ${
                     idx === activeIndex
                       ? "w-8 bg-foreground"
                       : "w-2 bg-foreground/20 hover:bg-foreground/40"
@@ -146,7 +147,7 @@ export function TestimonialsSection() {
         </div>
       </div>
 
-      <div className="w-full">
+      <div className="w-full marquee-mask">
         <div className="flex gap-16 items-center marquee">
           {[...Array(2)].map((_, setIdx) => (
             <div key={setIdx} className="flex gap-16 items-center shrink-0">

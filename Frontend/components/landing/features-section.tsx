@@ -266,10 +266,10 @@ export function FeaturesSection() {
     <section
       id="features"
       ref={sectionRef}
-      className="relative py-24 lg:py-32"
+      className="relative py-20 lg:py-24"
     >
       <div className="max-w-[1400px] mx-auto px-6 lg:px-12">
-        <div className="mb-16 lg:mb-24">
+        <div className="mb-12 lg:mb-16">
           <span className="inline-flex items-center gap-3 text-sm font-mono text-muted-foreground mb-6">
             <span className="w-8 h-px bg-foreground/30" />
             What every agent gets

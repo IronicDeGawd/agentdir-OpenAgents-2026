@@ -10,9 +10,13 @@ const words = ["discover", "own", "earn", "get paid"];
 export function HeroSection() {
   const [isVisible, setIsVisible] = useState(false);
   const [wordIndex, setWordIndex] = useState(0);
+  // First render shows the word with no per-char animation so SSR + hydrate
+  // match. After mount we flip to animated cycling.
+  const [hasMounted, setHasMounted] = useState(false);
 
   useEffect(() => {
     setIsVisible(true);
+    setHasMounted(true);
   }, []);
 
   useEffect(() => {
@@ -23,55 +27,49 @@ export function HeroSection() {
   }, []);
 
   return (
-    <section className="relative min-h-screen flex flex-col justify-center overflow-hidden">
-      {/* Animated sphere background */}
-      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[600px] h-[600px] lg:w-[800px] lg:h-[800px] opacity-40 pointer-events-none">
+    <section className="relative flex flex-col justify-center overflow-hidden">
+      {/* Animated sphere background — capped right + dimmed so it doesn't
+          eat the headline. */}
+      <div className="absolute right-[-120px] top-1/2 -translate-y-1/2 w-[480px] h-[480px] lg:w-[640px] lg:h-[640px] opacity-25 pointer-events-none">
         <AnimatedSphere />
       </div>
-      
+
       {/* Subtle grid lines */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-30">
         {[...Array(8)].map((_, i) => (
           <div
             key={`h-${i}`}
             className="absolute h-px bg-foreground/10"
-            style={{
-              top: `${12.5 * (i + 1)}%`,
-              left: 0,
-              right: 0,
-            }}
+            style={{ top: `${12.5 * (i + 1)}%`, left: 0, right: 0 }}
           />
         ))}
         {[...Array(12)].map((_, i) => (
           <div
             key={`v-${i}`}
             className="absolute w-px bg-foreground/10"
-            style={{
-              left: `${8.33 * (i + 1)}%`,
-              top: 0,
-              bottom: 0,
-            }}
+            style={{ left: `${8.33 * (i + 1)}%`, top: 0, bottom: 0 }}
           />
         ))}
       </div>
-      
-      <div className="relative z-10 max-w-[1400px] mx-auto px-6 lg:px-12 py-32 lg:py-40">
+
+      <div className="relative z-10 max-w-[1400px] mx-auto px-6 lg:px-12 pt-28 pb-16 lg:pt-32 lg:pb-24 w-full">
         {/* Eyebrow */}
-        <div 
+        <div
           className={`mb-8 transition-all duration-700 ${
             isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
           }`}
         >
           <span className="inline-flex items-center gap-3 text-sm font-mono text-muted-foreground">
             <span className="w-8 h-px bg-foreground/30" />
-            Yellow pages for autonomous agents
+            <span className="hidden sm:inline">Yellow pages for autonomous agents</span>
+            <span className="sm:hidden">Yellow pages · agents</span>
           </span>
         </div>
-        
+
         {/* Main headline */}
-        <div className="mb-12">
-          <h1 
-            className={`text-[clamp(3rem,12vw,10rem)] font-display leading-[0.9] tracking-tight transition-all duration-1000 ${
+        <div className="mb-10 lg:mb-12">
+          <h1
+            className={`text-[clamp(2.5rem,9vw,8rem)] font-display leading-[0.95] tracking-tight transition-all duration-1000 ${
               isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
             }`}
           >
@@ -79,32 +77,31 @@ export function HeroSection() {
             <span className="block">
               to{" "}
               <span className="relative inline-block">
-                <span 
-                  key={wordIndex}
-                  className="inline-flex"
-                >
-                  {words[wordIndex].split("").map((char, i) => (
-                    <span
-                      key={`${wordIndex}-${i}`}
-                      className="inline-block animate-char-in"
-                      style={{
-                        animationDelay: `${i * 50}ms`,
-                      }}
-                    >
-                      {char}
-                    </span>
-                  ))}
-                </span>
+                {hasMounted ? (
+                  <span key={wordIndex} className="inline-flex whitespace-pre">
+                    {words[wordIndex].split("").map((char, i) => (
+                      <span
+                        key={`${wordIndex}-${i}`}
+                        className="inline-block animate-char-in"
+                        style={{ animationDelay: `${i * 50}ms` }}
+                      >
+                        {char === " " ? " " : char}
+                      </span>
+                    ))}
+                  </span>
+                ) : (
+                  <span className="inline-flex whitespace-pre">{words[0]}</span>
+                )}
                 <span className="absolute -bottom-2 left-0 right-0 h-3 bg-foreground/10" />
               </span>
             </span>
           </h1>
         </div>
-        
+
         {/* Description */}
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-24 items-end">
+        <div className="grid lg:grid-cols-2 gap-10 lg:gap-24 items-end">
           <p
-            className={`text-xl lg:text-2xl text-muted-foreground leading-relaxed max-w-xl transition-all duration-700 delay-200 ${
+            className={`text-lg lg:text-xl text-muted-foreground leading-relaxed max-w-xl transition-all duration-700 delay-200 ${
               isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
             }`}
           >
@@ -139,18 +136,17 @@ export function HeroSection() {
             </a>
           </div>
         </div>
-        
       </div>
-      
-      {/* Stats marquee - full width outside container */}
-      <div 
-        className={`absolute bottom-24 left-0 right-0 transition-all duration-700 delay-500 ${
+
+      {/* Stats marquee — in flow, masked edges so cards don't clip mid-letter. */}
+      <div
+        className={`relative z-10 border-t border-foreground/10 pt-8 pb-10 marquee-mask transition-opacity duration-700 delay-500 ${
           isVisible ? "opacity-100" : "opacity-0"
         }`}
       >
         <div className="flex gap-16 marquee whitespace-nowrap">
           {[...Array(2)].map((_, i) => (
-            <div key={i} className="flex gap-16">
+            <div key={i} className="flex gap-16 shrink-0">
               {[
                 { value: "4", label: "agents live on Sepolia", company: "AGENTDIR.ETH" },
                 { value: "17/17", label: "iNFT contract tests", company: "ERC-7857" },
@@ -158,7 +154,7 @@ export function HeroSection() {
                 { value: "~60s", label: "discover → pay → infer → attest", company: "ROUNDTRIP" },
               ].map((stat) => (
                 <div key={`${stat.company}-${i}`} className="flex items-baseline gap-4">
-                  <span className="text-4xl lg:text-5xl font-display">{stat.value}</span>
+                  <span className="text-3xl lg:text-4xl font-display">{stat.value}</span>
                   <span className="text-sm text-muted-foreground">
                     {stat.label}
                     <span className="block font-mono text-xs mt-1">{stat.company}</span>
@@ -169,9 +165,6 @@ export function HeroSection() {
           ))}
         </div>
       </div>
-      
-      {/* Scroll indicator */}
-      
     </section>
   );
 }

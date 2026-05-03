@@ -168,8 +168,8 @@ export function HowItWorksSection() {
                     <div 
                       key={`${activeStep}-${lineIndex}`} 
                       className="leading-loose code-line-reveal"
-                      style={{ 
-                        animationDelay: `${lineIndex * 80}ms`,
+                      style={{
+                        animationDelay: `${lineIndex * 30}ms`,
                       }}
                     >
                       <span className="text-background/20 select-none w-8 inline-block">{lineIndex + 1}</span>
@@ -179,7 +179,7 @@ export function HowItWorksSection() {
                             key={`${activeStep}-${lineIndex}-${charIndex}`}
                             className="code-char-reveal"
                             style={{
-                              animationDelay: `${lineIndex * 80 + charIndex * 15}ms`,
+                              animationDelay: `${lineIndex * 30 + charIndex * 4}ms`,
                             }}
                           >
                             {char === ' ' ? '\u00A0' : char}
