@@ -81,17 +81,14 @@ export class DirectCompute {
    */
   static async create(opts: DirectComputeOpts): Promise<DirectCompute> {
     // The ESM bundle (`@0gfoundation/0g-compute-ts-sdk`) ships with a broken
-    // re-export ("does not provide an export named 'C'"). The CJS bundle
-    // is correct, but the package's exports map blocks subpath access.
-    //
-    // We use a runtime indirection (`Function('return require')()`) so that
-    // bundlers cannot statically see the require call. They leave it as
-    // plain JS; at runtime it resolves to Node's real require. Without this
-    // hack webpack rewrites `require("node:module")` and friends, breaking
-    // both `createRequire` and `node:path`.
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval
-    const nodeRequire = Function("return require")() as NodeJS.Require;
-    const nodePath = nodeRequire("node:path") as typeof import("node:path");
+    // re-export, so we dive into the CJS subpath at runtime. Webpack's
+    // `webpackIgnore: true` magic comment makes the bundler leave the
+    // import() expression alone; Node sees it as a real dynamic import.
+    const nodeModuleNs: any = await import(/* webpackIgnore: true */ "node:module");
+    const nodePathNs: any = await import(/* webpackIgnore: true */ "node:path");
+    const nodeModule = (nodeModuleNs.default ?? nodeModuleNs) as typeof import("node:module");
+    const nodePath = (nodePathNs.default ?? nodePathNs) as typeof import("node:path");
+    const nodeRequire = nodeModule.createRequire(import.meta.url);
     const mainEntry = nodeRequire.resolve("@0gfoundation/0g-compute-ts-sdk");
     const pkgRoot = nodePath.resolve(nodePath.dirname(mainEntry), "..");
     const cjs = nodePath.join(pkgRoot, "lib.commonjs", "index.js");
