@@ -53,8 +53,13 @@ export class Compute {
       stream: true,
     });
     for await (const chunk of s) {
-      const t = chunk.choices[0]?.delta?.content;
-      if (t) yield t;
+      // 0G Router sometimes emits a final chunk with no `choices`
+      // (usage-only frame). Be defensive; bare property access here
+      // would throw `Cannot read properties of undefined (reading '0')`
+      // and surface as a generator-level reject the agent runtime then
+      // signs as a remote error response.
+      const t = chunk?.choices?.[0]?.delta?.content;
+      if (typeof t === "string" && t.length > 0) yield t;
     }
   }
 }
