@@ -20,12 +20,30 @@ import { AGENTDIR } from "./agentdir";
 const ZG_RPC = process.env.ZG_RPC_URL ?? "https://evmrpc-testnet.0g.ai";
 
 // Storage requires a signer in its constructor but only uses it for uploads;
-// reads (getJson, indexer.download) never touch the key. For read-only
-// directory pages we use the env key when available, else generate a
-// throwaway 32-byte hex via Web Crypto. No on-chain action ever signs with this.
+// reads (getJson, indexer.download) never touch the key. In production we
+// require an explicit env key — silent fallback hides misconfiguration. In
+// dev only, fabricate a throwaway 32-byte hex with a loud warning.
+const HEX_KEY_RE = /^[0-9a-fA-F]{64}$/;
+
 function readOnlyPrivateKey(): string {
-  const env = process.env.AGENTDIR_READ_KEY ?? process.env.PRIVATE_KEY;
-  if (env && env.length >= 64) return env.startsWith("0x") ? env : `0x${env}`;
+  const raw = process.env.AGENTDIR_READ_KEY ?? process.env.PRIVATE_KEY ?? "";
+  const stripped = raw.startsWith("0x") ? raw.slice(2) : raw;
+  if (stripped) {
+    if (!HEX_KEY_RE.test(stripped)) {
+      throw new Error(
+        "AGENTDIR_READ_KEY / PRIVATE_KEY must be 32-byte hex (64 chars, optional 0x prefix)",
+      );
+    }
+    return `0x${stripped}`;
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "AGENTDIR_READ_KEY (or PRIVATE_KEY) is required in production. Refusing to fabricate ephemeral signer.",
+    );
+  }
+  console.warn(
+    "[sdk-server] No AGENTDIR_READ_KEY / PRIVATE_KEY set — fabricating a throwaway dev key. Reads only; do not deploy this way.",
+  );
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   return `0x${Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")}`;
@@ -54,24 +72,12 @@ export function getEnsResolver(): EnsResolver {
   return _ens;
 }
 
-let _directory: Directory | null = null;
 export function getDirectory(seed?: string[]): Directory {
-  // Custom seed → fresh instance. Default seed → cached singleton.
-  if (seed && seed.length) {
-    return new Directory({
-      ens: { network: "sepolia", sepoliaRpc: process.env.SEPOLIA_RPC_URL },
-      storage: getStorage(),
-      seed,
-    });
-  }
-  if (!_directory) {
-    _directory = new Directory({
-      ens: { network: "sepolia", sepoliaRpc: process.env.SEPOLIA_RPC_URL },
-      storage: getStorage(),
-      seed: AGENTDIR.agents.map((a) => a.ens),
-    });
-  }
-  return _directory;
+  return new Directory({
+    ens: { network: "sepolia", sepoliaRpc: process.env.SEPOLIA_RPC_URL },
+    storage: getStorage(),
+    seed: seed && seed.length ? seed : AGENTDIR.agents.map((a) => a.ens),
+  });
 }
 
 export function getRepChain(head: string | null = null): RepChain {

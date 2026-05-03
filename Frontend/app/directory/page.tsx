@@ -98,64 +98,62 @@ function FilterBar({
   seed: string;
 }) {
   return (
-    <form
-      method="get"
-      action="/directory"
-      className="grid grid-cols-2 lg:grid-cols-5 gap-px bg-foreground/10 border border-foreground/10"
-    >
-      <Field label="Skill">
-        <input
-          name="skill"
-          defaultValue={skill}
-          placeholder="summarize"
-          className="w-full bg-background px-4 py-3 outline-none focus:bg-foreground/[0.02]"
-        />
-      </Field>
-      <Field label="Min score">
-        <input
-          name="minScore"
-          type="number"
-          step="0.01"
-          min="0"
-          max="1"
-          defaultValue={minScore}
-          className="w-full bg-background px-4 py-3 outline-none focus:bg-foreground/[0.02]"
-        />
-      </Field>
-      <Field label="Lookback">
-        <input
-          name="lookback"
-          type="number"
-          min="1"
-          defaultValue={lookback}
-          className="w-full bg-background px-4 py-3 outline-none focus:bg-foreground/[0.02]"
-        />
-      </Field>
-      <Field label="Limit">
-        <input
-          name="limit"
-          type="number"
-          min="1"
-          defaultValue={limit}
-          className="w-full bg-background px-4 py-3 outline-none focus:bg-foreground/[0.02]"
-        />
-      </Field>
-      <Field label="Seed (csv ENS names)">
-        <div className="flex">
+    <form method="get" action="/directory" className="space-y-px bg-foreground/10 border border-foreground/10">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-foreground/10">
+        <Field label="Skill">
+          <input
+            name="skill"
+            defaultValue={skill}
+            placeholder="summarize"
+            className="w-full bg-background px-4 py-3 outline-none focus:bg-foreground/[0.02]"
+          />
+        </Field>
+        <Field label="Min score">
+          <input
+            name="minScore"
+            type="number"
+            step="0.01"
+            min="0"
+            max="1"
+            defaultValue={minScore}
+            className="w-full bg-background px-4 py-3 outline-none focus:bg-foreground/[0.02]"
+          />
+        </Field>
+        <Field label="Lookback">
+          <input
+            name="lookback"
+            type="number"
+            min="1"
+            defaultValue={lookback}
+            className="w-full bg-background px-4 py-3 outline-none focus:bg-foreground/[0.02]"
+          />
+        </Field>
+        <Field label="Limit">
+          <input
+            name="limit"
+            type="number"
+            min="1"
+            defaultValue={limit}
+            className="w-full bg-background px-4 py-3 outline-none focus:bg-foreground/[0.02]"
+          />
+        </Field>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-px bg-foreground/10">
+        <Field label="Seed (csv ENS names)">
           <input
             name="seed"
             defaultValue={seed}
             placeholder={AGENTDIR.agents.map((a) => a.ens).join(",")}
-            className="flex-1 bg-background px-4 py-3 outline-none focus:bg-foreground/[0.02]"
+            className="w-full bg-background px-4 py-3 outline-none focus:bg-foreground/[0.02]"
           />
-          <button
-            type="submit"
-            className="bg-foreground text-background px-6 py-3 text-sm font-medium hover:bg-foreground/90 transition-colors"
-          >
-            Query
-          </button>
-        </div>
-      </Field>
+        </Field>
+        <button
+          type="submit"
+          className="bg-foreground text-background px-8 py-4 text-sm font-medium hover:bg-foreground/90 transition-colors w-full sm:w-auto"
+        >
+          Query
+        </button>
+      </div>
     </form>
   );
 }
@@ -190,8 +188,9 @@ async function DirectoryResults({
   try {
     const dir = getDirectory(seed);
     results = await dir.query({ skill, minScore, lookback, limit });
-  } catch (err: any) {
-    queryError = err?.message ?? "directory query failed";
+  } catch (err) {
+    console.error("[page:directory] query failed", err);
+    queryError = "Directory query failed";
   }
 
   if (queryError) {
@@ -230,7 +229,7 @@ async function DirectoryResults({
         const sigil = row.score.score >= 0.7 ? "★" : row.score.score >= 0.3 ? "◆" : "·";
         const top = row.card.skills.find((s) => s.id === skill) ?? row.card.skills[0];
         const price = top?.pricing?.x402
-          ? `${(top.pricing.x402 as any).amount} ${(top.pricing.x402 as any).token}`
+          ? formatPrice(top.pricing.x402 as { amount: string; token: string })
           : "free";
         return (
           <Link
@@ -296,4 +295,18 @@ function parseNum(v: string | undefined, fallback: number): number {
   if (!v) return fallback;
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
+}
+
+// Pricing.amount may be either a decimal string ("0.01") per current SDK
+// convention, or a raw atomic-unit integer ("10000" = 0.01 USDC w/ 6
+// decimals) from older fixtures. Detect via integer-without-dot heuristic:
+// >=4-digit integer with no decimal → assume USDC atomic units.
+function formatPrice(p: { amount: string; token: string }): string {
+  const { amount, token } = p;
+  const isAtomic = /^\d+$/.test(amount) && amount.length >= 4;
+  const decimals = token.toUpperCase() === "USDC" ? 6 : 18;
+  const display = isAtomic
+    ? (Number(amount) / 10 ** decimals).toString()
+    : amount;
+  return `${display} ${token}`;
 }

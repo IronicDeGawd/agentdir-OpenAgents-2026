@@ -78,8 +78,9 @@ async function loadRep(ens: string, limit: number): Promise<LoadResult> {
     const chain = getRepChain();
     const entries = await chain.walk(head, limit, axlPub ?? undefined);
     return { kind: "ok", head, axlPub, entries };
-  } catch (err: any) {
-    return { kind: "error", message: err?.message ?? "rep walk failed" };
+  } catch (err) {
+    console.error("[page:rep] fetch failed", err);
+    return { kind: "error", message: "Reputation lookup failed" };
   }
 }
 

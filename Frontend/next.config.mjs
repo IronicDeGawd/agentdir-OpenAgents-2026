@@ -8,9 +8,6 @@ const nextConfig = {
   // Pin tracing to the monorepo root so Next doesn't latch onto an
   // unrelated lockfile higher up the directory tree (e.g. ~/package-lock.json).
   outputFileTracingRoot: resolve(__dirname, ".."),
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   images: {
     unoptimized: true,
   },

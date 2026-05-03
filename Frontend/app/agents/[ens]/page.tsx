@@ -77,16 +77,28 @@ async function loadAgent(ens: string): Promise<LoadResult> {
         const err = await resolver.verifyIdentity(ens, axlPub);
         verified = err === null;
         verifyError = err;
-      } catch (e: any) {
+      } catch (e) {
+        console.error("[page:agent] verifyIdentity threw", e);
         verified = false;
-        verifyError = e?.message ?? "verifyIdentity threw";
+        verifyError = "verification failed";
       }
     }
 
-    return { kind: "ok", card, records: bundle, verified, verifyError, axlPub };
-  } catch (err: any) {
-    return { kind: "error", message: err?.message ?? "lookup failed" };
+    return { kind: "ok", card, records: bundle, verified, verifyError: normalizeVerifyError(verifyError), axlPub };
+  } catch (err) {
+    console.error("[page:agent] fetch failed", err);
+    return { kind: "error", message: "Agent lookup failed" };
   }
+}
+
+function normalizeVerifyError(raw: string | null): string | null {
+  if (raw === null) return null;
+  const s = raw.toLowerCase();
+  if (s.includes("no axl")) return "missing AXL pubkey";
+  if (s.includes("mismatch") || s.includes("does not match")) return "signature mismatch";
+  if (s.includes("controller")) return "missing controller";
+  if (s.includes("rpc") || s.includes("network")) return "rpc error";
+  return "verification failed";
 }
 
 function AgentBody({ ens, data }: { ens: string; data: Extract<LoadResult, { kind: "ok" }> }) {
