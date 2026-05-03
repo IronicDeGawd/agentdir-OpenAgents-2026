@@ -59,7 +59,7 @@ export async function ensureIndexes(): Promise<void> {
     db.collection("identities").createIndex({ handle: 1 }, { unique: true }),
     db.collection("identities").createIndex({ ens: 1 }, { unique: true }),
     db.collection("identities").createIndex({ ownerAddress: 1 }),
-    db.collection("mint_nonces").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+    db.collection("auth_nonces").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
     db.collection("rate_limits").createIndex({ windowEndsAt: 1 }, { expireAfterSeconds: 0 }),
     db.collection("mint_log").createIndex({ createdAt: -1 }),
     db.collection("mint_log").createIndex({ ownerAddress: 1, createdAt: -1 }),

@@ -1,4 +1,6 @@
-import "server-only";
+// Chain definition + iNFT ABI/address. Safe on both server and client —
+// no secrets, no fs/node imports. Server callers add their signers; client
+// callers use wagmi/viem.
 
 import { defineChain } from "viem";
 
@@ -35,12 +37,57 @@ export const INFT_ABI = [
     outputs: [{ name: "tokenId", type: "uint256" }],
   },
   {
+    type: "function",
+    name: "setAgentStateRoot",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "tokenId", type: "uint256" },
+      { name: "newRoot", type: "bytes32" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "ownerOf",
+    stateMutability: "view",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [{ name: "owner", type: "address" }],
+  },
+  {
+    type: "function",
+    name: "agentStateRoot",
+    stateMutability: "view",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [{ name: "root", type: "bytes32" }],
+  },
+  {
+    type: "function",
+    name: "transferFrom",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "from", type: "address" },
+      { name: "to", type: "address" },
+      { name: "tokenId", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
     type: "event",
     name: "Transfer",
     inputs: [
       { name: "from", type: "address", indexed: true },
       { name: "to", type: "address", indexed: true },
       { name: "tokenId", type: "uint256", indexed: true },
+    ],
+  },
+  {
+    type: "event",
+    name: "AgentStateUpdated",
+    inputs: [
+      { name: "tokenId", type: "uint256", indexed: true },
+      { name: "prevRoot", type: "bytes32", indexed: false },
+      { name: "newRoot", type: "bytes32", indexed: false },
+      { name: "by", type: "address", indexed: true },
     ],
   },
 ] as const;

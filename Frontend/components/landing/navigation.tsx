@@ -9,8 +9,8 @@ import { WalletButton } from "@/components/wallet-button";
 const navLinks = [
   { name: "Directory", href: "/directory" },
   { name: "Mint", href: "/mint" },
+  { name: "Dashboard", href: "/dashboard" },
   { name: "How it works", href: "/#how-it-works" },
-  { name: "Stack", href: "/#integrations" },
 ];
 
 export function Navigation() {

@@ -19,3 +19,6 @@ probes/*/.work/
 probes/*/.work-last.log
 .demo-work/
 
+*.key
+*.pem
+*.crt

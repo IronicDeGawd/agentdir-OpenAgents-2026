@@ -10,6 +10,7 @@ const ALLOWED = [
   "lib/identity-store.ts",
   "lib/identity-gen.ts",
   "app/api/mint/route.ts",
+  "app/api/snapshot/route.ts",
   "app/mint/mint-flow.tsx",
   "lib/__tests__",
   "scripts/audit-privkey.mjs",

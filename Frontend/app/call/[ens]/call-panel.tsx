@@ -43,6 +43,13 @@ export function CallPanel({ ens, card }: Props) {
   const [result, setResult] = useState<CallResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Mode toggles. UI-only for now; backend wiring rides on the next pass.
+  const [mode, setMode] = useState<{ stream: boolean; tee: boolean; pay: boolean }>({
+    stream: false,
+    tee: false,
+    pay: false,
+  });
+
   function onSkillChange(next: string) {
     setSkillId(next);
     setInputJson(JSON.stringify(defaultInputFor(next), null, 2));
@@ -141,6 +148,40 @@ export function CallPanel({ ens, card }: Props) {
             />
           </div>
 
+          <div>
+            <label className="block text-xs font-mono text-muted-foreground uppercase tracking-widest mb-2">
+              Mode
+            </label>
+            <div className="flex flex-wrap gap-2 font-mono text-xs">
+              <CallToggle
+                active={mode.stream}
+                onClick={() => setMode((m) => ({ ...m, stream: !m.stream }))}
+                disabled={running}
+              >
+                stream
+              </CallToggle>
+              <CallToggle
+                active={mode.tee}
+                onClick={() => setMode((m) => ({ ...m, tee: !m.tee }))}
+                disabled={running}
+              >
+                TEE-verify
+              </CallToggle>
+              <CallToggle
+                active={mode.pay}
+                onClick={() => setMode((m) => ({ ...m, pay: !m.pay }))}
+                disabled={running || !skill?.pricing?.x402}
+              >
+                x402 pay
+              </CallToggle>
+            </div>
+            <p className="text-[11px] font-mono text-muted-foreground mt-2">
+              stream + TEE land via DirectCompute (E9). x402 settles via
+              KeeperHub on Sepolia. UI is wired; backend toggles ride on
+              the next iteration.
+            </p>
+          </div>
+
           <div className="flex items-center gap-3">
             <Button
               onClick={fire}
@@ -150,7 +191,7 @@ export function CallPanel({ ens, card }: Props) {
               {running ? "Calling…" : "Fire call"}
             </Button>
             <span className="text-xs font-mono text-muted-foreground">
-              transport: LocalBus · payment: free
+              transport: LocalBus · payment: {mode.pay ? "x402" : "free"}
             </span>
           </div>
 
@@ -209,6 +250,10 @@ export function CallPanel({ ens, card }: Props) {
           </div>
         </div>
 
+        {result?.ok && Array.isArray((result.output as any)?.trace) && (
+          <HopTracePanel trace={(result.output as any).trace} />
+        )}
+
         {result?.ok && (
           <div className="border border-foreground/10">
             <div className="px-6 py-4 border-b border-foreground/10">
@@ -242,6 +287,77 @@ export function CallPanel({ ens, card }: Props) {
         )}
       </div>
     </div>
+  );
+}
+
+type Hop = {
+  from: string;
+  to: string;
+  skill: string;
+  ok: boolean;
+  latencyMs: number;
+  responderEns?: string;
+};
+
+function HopTracePanel({ trace }: { trace: Hop[] }) {
+  return (
+    <div className="border border-foreground/10">
+      <div className="px-6 py-4 border-b border-foreground/10 flex items-center justify-between">
+        <span className="text-xs font-mono text-muted-foreground uppercase tracking-widest">
+          Hop trace ({trace.length} hop{trace.length === 1 ? "" : "s"})
+        </span>
+        <span className="text-[10px] font-mono text-muted-foreground">
+          each hop is an independently signed call
+        </span>
+      </div>
+      <div className="px-6 py-4 space-y-2 font-mono text-xs">
+        {trace.map((h, i) => (
+          <div
+            key={`${h.from}-${i}`}
+            className="grid grid-cols-[auto_1fr_auto_auto] gap-3 items-center"
+          >
+            <span className={h.ok ? "text-emerald-500" : "text-destructive"}>
+              {h.ok ? "✓" : "✗"}
+            </span>
+            <span>
+              <span className="text-muted-foreground">{shortHex(h.from)}</span>
+              {" → "}
+              <strong>{h.responderEns ?? shortHex(h.to)}</strong>
+              <span className="text-muted-foreground">.{h.skill}</span>
+            </span>
+            <span className="text-muted-foreground">{h.latencyMs}ms</span>
+            <span className="text-muted-foreground">#{i + 1}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CallToggle({
+  active,
+  onClick,
+  disabled,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`px-3 py-1.5 border transition-colors ${
+        active
+          ? "border-foreground bg-foreground text-background"
+          : "border-foreground/20 hover:border-foreground/60 text-foreground/80"
+      } ${disabled ? "opacity-40 cursor-not-allowed" : ""}`}
+    >
+      {children}
+    </button>
   );
 }
 

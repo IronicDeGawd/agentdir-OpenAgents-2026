@@ -11,7 +11,7 @@ import { getDb, ensureIndexes } from "./db";
 const NONCE_TTL_SEC = 60;
 const NONCE_BYTES = 16;
 
-type Action = "mint";
+type Action = "mint" | "snapshot" | "transfer" | "skill-edit";
 
 export interface Challenge {
   nonce: string;
@@ -23,7 +23,7 @@ function buildMessage(action: Action, ownerAddress: string, ens: string, nonce: 
   // Human-readable, anchors who/what/why so a malicious dapp can't trick
   // a user into signing something reusable elsewhere. Nonce prevents replay.
   return [
-    "agentdir mint authorization",
+    "agentdir authorization",
     `action: ${action}`,
     `owner: ${ownerAddress.toLowerCase()}`,
     `ens: ${ens}`,
@@ -38,7 +38,9 @@ export async function issueChallenge(input: {
   ens: string;
 }): Promise<Challenge> {
   if (!isAddress(input.ownerAddress)) throw new Error("bad ownerAddress");
-  if (input.action !== "mint") throw new Error("unsupported action");
+  if (!["mint", "snapshot", "transfer", "skill-edit"].includes(input.action)) {
+    throw new Error("unsupported action");
+  }
 
   await ensureIndexes();
   const nonce = randomBytes(NONCE_BYTES).toString("hex");
@@ -46,7 +48,7 @@ export async function issueChallenge(input: {
   const expiresAt = new Date(Date.now() + NONCE_TTL_SEC * 1000);
 
   const db = await getDb();
-  await db.collection("mint_nonces").insertOne({
+  await db.collection("auth_nonces").insertOne({
     _id: nonce,
     ownerAddress: input.ownerAddress.toLowerCase(),
     ens: input.ens,
@@ -81,7 +83,7 @@ export async function verifyAndConsume(input: {
   // and matches owner+ens. findOneAndUpdate avoids the time-of-check vs
   // time-of-use race that two parallel mints could exploit.
   const db = await getDb();
-  const consumed = await db.collection("mint_nonces").findOneAndUpdate(
+  const consumed = await db.collection("auth_nonces").findOneAndUpdate(
     {
       _id: nonce,
       ownerAddress: input.ownerAddress.toLowerCase(),
@@ -110,7 +112,7 @@ export async function verifyAndConsume(input: {
     // Optimistically un-consume so a typo doesn't burn the user's nonce.
     // Race-free because we just consumed it; nobody else has it.
     await db
-      .collection("mint_nonces")
+      .collection("auth_nonces")
       .updateOne({ _id: nonce } as any, { $set: { consumedAt: null } });
     return { ok: false, reason: "signature did not verify" };
   }
