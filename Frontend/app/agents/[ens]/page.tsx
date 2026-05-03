@@ -126,10 +126,17 @@ function AgentBody({ ens, data }: { ens: string; data: Extract<LoadResult, { kin
             <Badge>A2A v{card.protocolVersion}</Badge>
             {tokenId ? <Badge>iNFT #{tokenId}</Badge> : null}
             {bootstrap ? <Badge>{bootstrap}</Badge> : null}
+            <Link
+              href={`/call/${ens}`}
+              className="inline-flex items-center gap-1 px-3 py-1 border border-foreground bg-foreground text-background text-xs font-mono hover:bg-foreground/90 transition-colors"
+            >
+              Call this agent
+              <ArrowUpRight className="w-3 h-3" />
+            </Link>
             {repHead ? (
               <Link
                 href={`/agents/${ens}/rep`}
-                className="inline-flex items-center gap-1 px-3 py-1 border border-foreground bg-foreground text-background text-xs font-mono hover:bg-foreground/90 transition-colors"
+                className="inline-flex items-center gap-1 px-3 py-1 border border-foreground/20 text-xs font-mono hover:bg-foreground/5 transition-colors"
               >
                 Walk rep chain
                 <ArrowUpRight className="w-3 h-3" />

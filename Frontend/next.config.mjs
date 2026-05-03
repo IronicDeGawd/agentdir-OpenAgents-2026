@@ -13,7 +13,7 @@ const nextConfig = {
   },
   // The SDK ships TypeScript source with ESM `.js` import suffixes (NodeNext
   // convention). The bundler needs to resolve `./types.js` to `./types.ts`.
-  transpilePackages: ["@agentdir/sdk"],
+  transpilePackages: ["@agentdir/sdk", "@agentdir/agent"],
   webpack: (config) => {
     config.resolve.extensionAlias = {
       ".js": [".js", ".ts", ".tsx"],
