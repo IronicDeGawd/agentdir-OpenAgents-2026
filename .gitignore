@@ -11,7 +11,7 @@ cache/
 broadcast/
 private*.pem
 .DS_Store
-
+.playwright-mcp
 .claude/
 
 # probe scratch
