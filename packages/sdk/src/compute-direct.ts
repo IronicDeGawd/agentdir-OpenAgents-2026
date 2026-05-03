@@ -18,7 +18,16 @@
 //      before the first request to that provider.
 //   4. broker.inference.transferFund(provider, amount) — sub-account.
 
+import { createRequire } from "node:module";
+import * as nodePath from "node:path";
 import type { Wallet, JsonRpcSigner } from "ethers";
+
+// Top-level createRequire avoids dynamic `await import("node:module")` which
+// some bundlers (Next webpack) inline-mangle, breaking the .createRequire
+// reference at runtime. Using import.meta.url at top level lets the bundler
+// preserve it correctly when this file is bundled OR leave it untouched when
+// the file is loaded as plain Node ESM.
+const __require = createRequire(import.meta.url);
 
 export type DirectComputeChatOpts = {
   maxTokens?: number;
@@ -85,15 +94,10 @@ export class DirectCompute {
     // is correct, but the package's exports map blocks subpath access.
     // Resolve a known shipped file via the main entry, walk up to the
     // package root, then dive into lib.commonjs.
-    const nodeModule: any = await import("node:module");
-    const path = await import("node:path");
-    const require_ = nodeModule.createRequire(import.meta.url);
-    // Main entry resolves to /<root>/lib.esm/index.mjs; we want
-    // /<root>/lib.commonjs/index.js sitting next to it.
-    const mainEntry = require_.resolve("@0gfoundation/0g-compute-ts-sdk");
-    const pkgRoot = path.resolve(path.dirname(mainEntry), "..");
-    const cjs = path.join(pkgRoot, "lib.commonjs", "index.js");
-    const { createZGComputeNetworkBroker } = require_(cjs);
+    const mainEntry = __require.resolve("@0gfoundation/0g-compute-ts-sdk");
+    const pkgRoot = nodePath.resolve(nodePath.dirname(mainEntry), "..");
+    const cjs = nodePath.join(pkgRoot, "lib.commonjs", "index.js");
+    const { createZGComputeNetworkBroker } = __require(cjs);
     const broker = await createZGComputeNetworkBroker(opts.signer);
     const meta = await broker.inference.getServiceMetadata(opts.provider);
     return new DirectCompute(broker, opts.provider, meta.endpoint, meta.model);
